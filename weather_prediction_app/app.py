@@ -1,6 +1,3 @@
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase
-import sqlite3
 from flask import Flask, render_template, request, jsonify, send_file
 import requests
 from datetime import datetime, timedelta
@@ -25,120 +22,70 @@ import base64
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib
 import threading
+import csv
+from io import StringIO
+from flask import make_response
 
-matplotlib.use('Agg')  # Use non-interactive backend , generating plots as image files without displaying them on a screen
+# Import models from separate file
+from models import db, Prediction, ModelPerformance
 
-warnings.filterwarnings('ignore') #ignore all warning messages, preventing them from being printed to the console
+matplotlib.use('Agg')
+warnings.filterwarnings('ignore')
 np.random.seed(42)
 
-app = Flask(__name__) #Creates a Flask web application instance (initializes a new Flask app)
+app = Flask(__name__)
 
-class Base(DeclarativeBase): #This sets up the foundation for defining database tables as Python classes, which SQLAlchemy will map to the database.
-    pass
-
-db = SQLAlchemy(model_class=Base) # This sets up SQLAlchemy to manage the database using the custom Base class
+# Database configuration
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
-app.config["SQLALCHEMY_ECHO"] = False # set to False to avoid cluttering logs with SQL statements (to not ,make the output tab a mess).
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False # reducing memory usage and improving performance
+app.config["SQLALCHEMY_ECHO"] = False
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Initialize the app with the extension (integrate SQLAlchemy with Flask, enabling database operations in routes and other app logic.)
+# Initialize db with app
 db.init_app(app)
 
 # Configuration
 API_KEY = "245159b18d634837900112029250310"
 BASE_URL = "https://api.weatherapi.com/v1"
 
-# Database Models
-class Prediction(db.Model):
-    __tablename__ = "predictions"
-
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    prediction_date = db.Column(db.Date, nullable=False)  # The date being predicted
-    generation_timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_version = db.Column(db.String(50), nullable=False)
-
-    # Prediction values
-    min_temp = db.Column(db.Float, nullable=False)
-    max_temp = db.Column(db.Float, nullable=False)
-    avg_temp = db.Column(db.Float, nullable=False)
-    humidity = db.Column(db.Float, nullable=False)
-    wind_speed = db.Column(db.Float, nullable=False)
-    condition = db.Column(db.String(100), nullable=False)
-
-    #for historical tracking
-    is_current = db.Column(db.Boolean, default=True)  # Mark most recent prediction
-    version = db.Column(db.Integer, default=1)  # Version number
-
-    # Index for faster queries (speed boosters)
-    __table_args__ = (
-        db.Index('idx_city_date', 'city', 'prediction_date'),
-        db.Index('idx_generation_timestamp', 'generation_timestamp'),
-    )
-
-
-class ModelPerformance(db.Model):
-    __tablename__ = "model_performance"
-
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_name = db.Column(db.String(50), nullable=False)
-    r2_score = db.Column(db.Float, nullable=False)
-    mae = db.Column(db.Float, nullable=False)
-    rmse = db.Column(db.Float, nullable=False)
-
-    # Detailed metrics (stored as JSON)
-    detailed_metrics = db.Column(db.JSON, nullable=False)
-
-
 class WeatherPredictor:
     def __init__(self):
-        self.model = None  # Placeholder for ML model (e.g., LSTM, XGBoost, etc.)
-        self.scaler_X = None  # To scale/normalize input features
-        self.scaler_y = None # To scale/normalize output values
-        self.feature_cols = None # Which features (columns) the model uses
-        self.df = None # DataFrame with training/testing data
-        self.results = None # To store prediction results
-        self.best_model_name = None  # Keep track of which model performed best
-        # Initialize cache
-        self.cache = {}   # Dictionary used as a cache (memory of past results)
-        self.cache_lock = threading.Lock()  # To prevent cache conflicts in multi-threaded use
+        self.model = None
+        self.scaler_X = None
+        self.scaler_y = None
+        self.feature_cols = None
+        self.df = None
+        self.results = None
+        self.best_model_name = None
+        self.cache = {}
+        self.cache_lock = threading.Lock()
 
-    def get_cache_key(self, city, days=7):   #get_cache_key("Amman", 7) → "amman_2025-10-01_7"
-        """Generate a unique key for the cache based on city and date."""
+    def get_cache_key(self, city, days=7):
         today_str = datetime.now().strftime("%Y-%m-%d")
         return f"{city.lower()}_{today_str}_{days}"
 
-    def get_cached_prediction(self, cache_key): # If the prediction already exists , it returns it
-        """Retrieve a prediction from the cache if it exists and is valid."""
+    def get_cached_prediction(self, cache_key):
         with self.cache_lock:
             return self.cache.get(cache_key)
 
-    def save_prediction_to_cache(self, cache_key, prediction_data): # Stores a new prediction in the cache.
-        """Save a prediction to the cache."""
+    def save_prediction_to_cache(self, cache_key, prediction_data):
         with self.cache_lock:
-            # Limit cache size to prevent memory issues
-            if len(self.cache) > 50: # If the cache already has more than 50 entries, it deletes the oldest one (so memory doesn’t explode).
-                # Remove oldest entry
+            if len(self.cache) > 50:
                 oldest_key = next(iter(self.cache))
                 del self.cache[oldest_key]
             self.cache[cache_key] = prediction_data
 
     def clear_old_cache(self):
-        """Clear cache entries older than 2 days"""
         with self.cache_lock:
             current_date = datetime.now().strftime("%Y-%m-%d")
             keys_to_remove = []
             for key in self.cache.keys():
-                key_date = key.split('_')[1] # extract the YYYY-MM-DD part
-                if key_date < current_date: # checks if the cache key is from an older date
+                key_date = key.split('_')[1]
+                if key_date < current_date:
                     keys_to_remove.append(key)
             for key in keys_to_remove:
                 del self.cache[key]
 
     def fetch_weather_data(self, city, days=365):
-        """Fetch weather data from API with error handling for invalid city"""
         historical_data = []
         end_date = datetime.now() - timedelta(days=1)
         start_date = end_date - timedelta(days=days - 1)
@@ -155,7 +102,6 @@ class WeatherPredictor:
 
                 response = requests.get(url, params=params, timeout=30)
 
-                # Check if city is invalid
                 if response.status_code != 200:
                     try:
                         error_message = response.json().get('error', {}).get('message', 'Unknown error')
@@ -165,7 +111,6 @@ class WeatherPredictor:
 
                 data = response.json()
 
-                # Ensure forecast data exists
                 if "forecast" not in data or "forecastday" not in data["forecast"]:
                     raise ValueError("City not found or no forecast data available.")
 
@@ -192,7 +137,6 @@ class WeatherPredictor:
         return historical_data
 
     def prepare_advanced_features(self, data):
-        """Prepare advanced features for machine learning"""
         df = pd.DataFrame(data)
 
         # Convert date and create comprehensive features
@@ -235,7 +179,6 @@ class WeatherPredictor:
         return df
 
     def train_advanced_models(self, X_train, X_test, y_train, y_test):
-        """Train advanced machine learning models with tuned parameters"""
         models = {
             'ElasticNet': ElasticNet(alpha=0.01, l1_ratio=0.7, random_state=42, max_iter=10000),
             'Ridge': Ridge(alpha=0.1, random_state=42, max_iter=10000),
@@ -284,7 +227,6 @@ class WeatherPredictor:
         return results
 
     def create_future_features(self, last_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
-        """Create feature matrix for future predictions"""
         future_features_list = []
         last_features = df[feature_cols].iloc[-1:].to_dict('records')[0]
         recent_data = df[['avg_c', 'humidity', 'wind_kph']].tail(15).to_dict('records')
@@ -362,7 +304,6 @@ class WeatherPredictor:
         return np.array(future_features_list)
 
     def train_model(self, city):
-        """Complete model training pipeline"""
         try:
             # Fetch data
             data = self.fetch_weather_data(city, days=180)
@@ -412,7 +353,6 @@ class WeatherPredictor:
             return {"error": str(e)}
 
     def predict_weather(self, days=7):
-        """Generate weather predictions"""
         try:
             if self.model is None:
                 return {"error": "Model not trained"}
@@ -444,17 +384,6 @@ class WeatherPredictor:
                     predictions_df.at[i, 'avg_temp'] = (row['min_temp'] + row['max_temp']) / 2
                 if row['avg_temp'] > row['max_temp']:
                     predictions_df.at[i, 'avg_temp'] = (row['min_temp'] + row['max_temp']) / 2
-
-
-
-
-
-
-
-
-
-
-
 
             future_dates = [last_date + timedelta(days=i + 1) for i in range(days)]
             predictions_df['date'] = future_dates
@@ -501,7 +430,6 @@ class WeatherPredictor:
 
     def determine_weather_condition(self, avg_temp, min_temp, max_temp, humidity, wind, month, recent_precip,
                                     day_index):
-        """Determine detailed weather condition based on multiple factors"""
         # Season adjustment
         is_summer = month in [6, 7, 8]
         is_winter = month in [12, 1, 2]
@@ -659,7 +587,6 @@ class WeatherPredictor:
         return detailed_condition.title()
 
     def generate_chart(self, predictions):
-        """Generate weather prediction chart"""
         try:
             # Extract data for plotting
             dates = [pred['date'] for pred in predictions]
@@ -711,72 +638,26 @@ class WeatherPredictor:
             print(f"Error generating chart: {e}")
             return None
 
+# Initialize predictor
+predictor = WeatherPredictor()
 
 def ensure_instance_folder():
-    """Ensure the instance folder exists"""
     instance_path = os.path.join(os.path.dirname(__file__), 'instance')
     if not os.path.exists(instance_path):
         os.makedirs(instance_path)
         print(f"Created instance folder at: {instance_path}")
     return instance_path
 
-
 def init_db():
     with app.app_context():
         try:
-            # Ensure instance folder exists
             ensure_instance_folder()
-
-            # First, check if the predictions table exists
-            # Use the correct path for direct SQLite connection
-            db_path = os.path.join('instance', 'weather_predictions.db')
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-
-            # Check if table exists
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='predictions'")
-            table_exists = cursor.fetchone() is not None
-
-            if table_exists:
-                # Get existing columns
-                cursor.execute("PRAGMA table_info(predictions)")
-                existing_columns = [column[1] for column in cursor.fetchall()]
-
-                # Add is_current column if it doesn't exist
-                if 'is_current' not in existing_columns:
-                    cursor.execute('ALTER TABLE predictions ADD COLUMN is_current BOOLEAN DEFAULT TRUE')
-                    print("✓ Added is_current column to predictions table")
-
-                # Add version column if it doesn't exist
-                if 'version' not in existing_columns:
-                    cursor.execute('ALTER TABLE predictions ADD COLUMN version INTEGER DEFAULT 1')
-                    print("✓ Added version column to predictions table")
-
-                # Update existing records to have is_current = True and version = 1
-                cursor.execute('UPDATE predictions SET is_current = TRUE, version = 1 WHERE is_current IS NULL')
-                print("✓ Updated existing records with default values")
-            else:
-                # Table doesn't exist, create it with all columns
-                db.create_all()
-                print("✓ Created predictions table with all columns")
-
-            conn.commit()
-            conn.close()
-
+            db.create_all()
+            print("✓ Database tables created successfully")
         except Exception as e:
-            print(f"Database modification error: {e}")
-            # Try to create tables if connection failed
-            try:
-                db.create_all()
-                print("✓ Created database tables using SQLAlchemy")
-            except Exception as e2:
-                print(f"Error creating tables: {e2}")
-
-        print("Database initialization completed successfully")
-
+            print(f"Database initialization error: {e}")
 
 def save_predictions_to_db(city, predictions, model_name, model_metrics):
-    """Save predictions to the database, preserving historical data"""
     try:
         generation_time = datetime.now()
         today = datetime.now().date()
@@ -870,9 +751,7 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
         print(f"Error saving to database: {e}")
         return False
 
-
 def get_latest_predictions_from_db(city, days=7):
-    """Retrieve the latest predictions from the database"""
     try:
         today = datetime.now().date()
 
@@ -911,19 +790,6 @@ def get_latest_predictions_from_db(city, days=7):
         print(f"Error retrieving from database: {e}")
         return None
 
-
-
-
-
-
-
-
-
-
-
-# Initialize predictor
-predictor = WeatherPredictor()
-
 @app.route('/cities', methods=['GET'])
 def get_cities():
     query = request.args.get('q', '')  # what the user typed
@@ -953,7 +819,6 @@ def get_cities():
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -1099,20 +964,16 @@ def predict():
             'error': f"An unexpected error occurred: {str(e)}"
         })
 
-
 @app.route('/cache/clear', methods=['POST'])
 def clear_cache():
-    """Endpoint to manually clear the cache"""
     try:
         predictor.cache.clear()
         return jsonify({'success': True, 'message': 'Cache cleared successfully'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-
 @app.route('/cache/stats', methods=['GET'])
 def cache_stats():
-    """Endpoint to get cache statistics"""
     try:
         stats = {
             'cache_size': len(predictor.cache),
@@ -1122,7 +983,6 @@ def cache_stats():
         return jsonify({'success': True, 'stats': stats})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
 
 # Background task to clear old cache entries daily
 def cache_cleanup_task():
@@ -1135,10 +995,8 @@ def cache_cleanup_task():
 cache_thread = threading.Thread(target=cache_cleanup_task, daemon=True)
 cache_thread.start()
 
-
 @app.route('/history/<city>', methods=['GET'])
 def get_history(city):
-    """Get historical predictions for analysis"""
     try:
         # Get the last 30 days of predictions
         end_date = datetime.now().date()
@@ -1182,10 +1040,8 @@ def get_history(city):
             'error': str(e)
         })
 
-
 @app.route('/performance/<city>', methods=['GET'])
 def get_performance(city):
-    """Get model performance history"""
     try:
         performances = ModelPerformance.query.filter_by(
             city=city
@@ -1220,27 +1076,11 @@ def get_performance(city):
             'error': str(e)
         })
 
-'''
-@app.route('/reset-db')
-def reset_db():
-    """Temporary route to reset the database with new schema"""
-    try:
-        with app.app_context():
-            db.drop_all()
-            db.create_all()
-            print("Database reset successfully")
-            return jsonify({'success': True, 'message': 'Database reset successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-'''
-
-
-
 @app.route('/check-schema')
 def check_schema():
-    """Check the database schema"""
     try:
-        conn = sqlite3.connect('weather_predictions.db')
+        import sqlite3
+        conn = sqlite3.connect('instance/weather_predictions.db')
         cursor = conn.cursor()
 
         # Check predictions table columns
@@ -1259,11 +1099,8 @@ def check_schema():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-
-
 @app.route('/debug-history')
 def debug_history():
-    """Debug route to see all historical data"""
     try:
         # Get all predictions for a city
         predictions = Prediction.query.filter_by(city='Amman').order_by(
@@ -1291,10 +1128,8 @@ def debug_history():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-
 @app.route('/debug-db')
 def debug_db():
-    """Debug database state"""
     try:
         # Check all predictions
         all_predictions = Prediction.query.all()
@@ -1332,10 +1167,8 @@ def debug_db():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-
 @app.route('/fix-metrics')
 def fix_metrics():
-    """Fix existing performance records with 0 R² scores"""
     try:
         performances = ModelPerformance.query.filter(
             ModelPerformance.r2_score == 0
@@ -1362,10 +1195,8 @@ def fix_metrics():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
 
-
 @app.route('/debug-metrics/<city>')
 def debug_metrics(city):
-    """Debug metrics for a city"""
     try:
         performances = ModelPerformance.query.filter_by(
             city=city
@@ -1389,10 +1220,8 @@ def debug_metrics(city):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-
 @app.route('/historical-data/<city>', methods=['GET'])
 def get_historical_data(city):
-    """Get historical weather data for analysis"""
     try:
         # Get date range from query parameters or use default
         days = request.args.get('days', 30, type=int)
@@ -1443,10 +1272,8 @@ def get_historical_data(city):
             'error': str(e)
         })
 
-
 @app.route('/historical-performance/<city>', methods=['GET'])
 def get_historical_performance(city):
-    """Get historical model performance data"""
     try:
         # Get limit from query parameters or use default
         limit = request.args.get('limit', 10, type=int)
@@ -1484,15 +1311,8 @@ def get_historical_performance(city):
             'error': str(e)
         })
 
-
-import csv
-from io import StringIO
-from flask import make_response
-
-
 @app.route('/download-historical-data/<city>', methods=['GET'])
 def download_historical_data(city):
-    """Download historical weather data as CSV"""
     try:
         # Get days parameter or default to 30
         days = request.args.get('days', 30, type=int)
@@ -1552,10 +1372,8 @@ def download_historical_data(city):
             'error': str(e)
         })
 
-
 @app.route('/download-performance-data/<city>', methods=['GET'])
 def download_performance_data(city):
-    """Download model performance data as CSV"""
     try:
         # Get limit parameter
         limit = request.args.get('limit', 50, type=int)
@@ -1615,10 +1433,8 @@ def download_performance_data(city):
             'error': str(e)
         })
 
-
 @app.route('/download-all-weather-data/<city>', methods=['GET'])
 def download_all_weather_data(city):
-    """Download ALL historical weather data as CSV from database"""
     try:
         # Get ALL historical predictions for this city
         predictions = Prediction.query.filter(
@@ -1672,10 +1488,8 @@ def download_all_weather_data(city):
             'error': str(e)
         })
 
-
 @app.route('/download-all-performance-data/<city>', methods=['GET'])
 def download_all_performance_data(city):
-    """Download ALL model performance data as CSV from database"""
     try:
         # Get ALL performance data for this city
         performances = ModelPerformance.query.filter_by(city=city).order_by(ModelPerformance.timestamp.desc()).all()
@@ -1727,13 +1541,9 @@ def download_all_performance_data(city):
             'error': str(e)
         })
 
+# Initialize database
 init_db()
-with app.app_context():
-    from sqlalchemy import inspect
 
-    inspector = inspect(db.engine)
-    print(inspector.get_columns("predictions"))
-    print(inspector.get_columns("model_performance"))
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     if not os.path.exists('templates'):
