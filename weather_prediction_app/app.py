@@ -1,4 +1,3 @@
-from models import db, Prediction, ModelPerformance
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 import sqlite3
@@ -31,19 +30,22 @@ matplotlib.use('Agg')  # Use non-interactive backend , generating plots as image
 
 warnings.filterwarnings('ignore') #ignore all warning messages, preventing them from being printed to the console
 np.random.seed(42)
+from weather_prediction_app import create_app, db
+from weather_prediction_app.models import Prediction, ModelPerformance
 
+app = create_app()
 app = Flask(__name__) #Creates a Flask web application instance (initializes a new Flask app)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
 app.config["SQLALCHEMY_ECHO"] = False # set to False to avoid cluttering logs with SQL statements (to not ,make the output tab a mess).
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False # reducing memory usage and improving performance
-
-# Initialize the app with the extension (integrate SQLAlchemy with Flask, enabling database operations in routes and other app logic.)
-db.init_app(app)
-
 # Configuration
 API_KEY = "245159b18d634837900112029250310"
 BASE_URL = "https://api.weatherapi.com/v1"
+# Initialize the app with the extension (integrate SQLAlchemy with Flask, enabling database operations in routes and other app logic.)
+db.init_app(app)
+
+
 
 
 class WeatherPredictor:
