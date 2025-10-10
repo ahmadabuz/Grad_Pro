@@ -78,6 +78,8 @@ import base64
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib
 import threading
+from datetime import datetime
+
 class WeatherPredictor:
     def __init__(self):
         self.model = None  # Placeholder for ML model (e.g., LSTM, XGBoost, etc.)
