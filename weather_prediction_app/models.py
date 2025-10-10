@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
+from datetime import datetime
 class Base(DeclarativeBase):
     pass
 
