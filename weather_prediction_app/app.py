@@ -26,9 +26,6 @@ import csv
 from io import StringIO
 from flask import make_response
 
-# Import models from separate file
-from models import db, Prediction, ModelPerformance
-
 matplotlib.use('Agg')
 warnings.filterwarnings('ignore')
 np.random.seed(42)
@@ -40,7 +37,8 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Initialize db with app
+# Import and initialize models AFTER app creation
+from models import db, Prediction, ModelPerformance
 db.init_app(app)
 
 # Configuration
