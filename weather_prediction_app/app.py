@@ -1106,7 +1106,7 @@ else:
         rmse = db.Column(db.Float, nullable=False)
         detailed_metrics = db.Column(db.JSON, nullable=False)
 
-    class WeatherPredictor:
+class WeatherPredictor:
     def __init__(self):
         self.model = None  # Placeholder for ML model (e.g., LSTM, XGBoost, etc.)
         self.scaler_X = None  # To scale/normalize input features
@@ -1118,6 +1118,7 @@ else:
         # Initialize cache
         self.cache = {}   # Dictionary used as a cache (memory of past results)
         self.cache_lock = threading.Lock()  # To prevent cache conflicts in multi-threaded use
+
     def get_cache_key(self, city, days=7):   #get_cache_key("Amman", 7) → "amman_2025-10-01_7"
         """Generate a unique key for the cache based on city and date."""
         today_str = datetime.now().strftime("%Y-%m-%d")
