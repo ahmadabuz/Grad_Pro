@@ -37,14 +37,16 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Import and initialize models AFTER app creation
-from models import db, Prediction, ModelPerformance
+def get_models():
+    from models import db, Prediction, ModelPerformance
+    return db, Prediction, ModelPerformance
+
+db, Prediction, ModelPerformance = get_models()
 db.init_app(app)
 
 # Configuration
 API_KEY = "245159b18d634837900112029250310"
 BASE_URL = "https://api.weatherapi.com/v1"
-
 class WeatherPredictor:
     def __init__(self):
         self.model = None
