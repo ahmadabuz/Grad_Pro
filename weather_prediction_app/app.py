@@ -1724,7 +1724,7 @@ class WeatherPredictor:
         except Exception as e:
             print(f"Error generating chart: {e}")
             return None
-     predictor = WeatherPredictor()
+predictor = WeatherPredictor()
 
 @app.route('/cities', methods=['GET'])
 def get_cities():
