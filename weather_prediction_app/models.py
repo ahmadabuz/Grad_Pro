@@ -8,36 +8,51 @@ class Base(DeclarativeBase):
 
 db = SQLAlchemy(model_class=Base)
 
-class Prediction(db.Model):
-    __tablename__ = "predictions"
+# Add this flag to prevent duplicate model registration
+_models_defined = False
 
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    prediction_date = db.Column(db.Date, nullable=False)
-    generation_timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_version = db.Column(db.String(50), nullable=False)
-    min_temp = db.Column(db.Float, nullable=False)
-    max_temp = db.Column(db.Float, nullable=False)
-    avg_temp = db.Column(db.Float, nullable=False)
-    humidity = db.Column(db.Float, nullable=False)
-    wind_speed = db.Column(db.Float, nullable=False)
-    condition = db.Column(db.String(100), nullable=False)
-    is_current = db.Column(db.Boolean, default=True)
-    version = db.Column(db.Integer, default=1)
+def define_models():
+    global _models_defined
+    if _models_defined:
+        return
+    
+    _models_defined = True
+    
+    class Prediction(db.Model):
+        __tablename__ = "predictions"
 
-    __table_args__ = (
-        db.Index('idx_city_date', 'city', 'prediction_date'),
-        db.Index('idx_generation_timestamp', 'generation_timestamp'),
-    )
+        id = db.Column(db.Integer, primary_key=True)
+        city = db.Column(db.String(100), nullable=False)
+        prediction_date = db.Column(db.Date, nullable=False)
+        generation_timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
+        model_version = db.Column(db.String(50), nullable=False)
+        min_temp = db.Column(db.Float, nullable=False)
+        max_temp = db.Column(db.Float, nullable=False)
+        avg_temp = db.Column(db.Float, nullable=False)
+        humidity = db.Column(db.Float, nullable=False)
+        wind_speed = db.Column(db.Float, nullable=False)
+        condition = db.Column(db.String(100), nullable=False)
+        is_current = db.Column(db.Boolean, default=True)
+        version = db.Column(db.Integer, default=1)
 
-class ModelPerformance(db.Model):
-    __tablename__ = "model_performance"
+        __table_args__ = (
+            db.Index('idx_city_date', 'city', 'prediction_date'),
+            db.Index('idx_generation_timestamp', 'generation_timestamp'),
+        )
 
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_name = db.Column(db.String(50), nullable=False)
-    r2_score = db.Column(db.Float, nullable=False)
-    mae = db.Column(db.Float, nullable=False)
-    rmse = db.Column(db.Float, nullable=False)
-    detailed_metrics = db.Column(db.JSON, nullable=False)
+    class ModelPerformance(db.Model):
+        __tablename__ = "model_performance"
+
+        id = db.Column(db.Integer, primary_key=True)
+        city = db.Column(db.String(100), nullable=False)
+        timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
+        model_name = db.Column(db.String(50), nullable=False)
+        r2_score = db.Column(db.Float, nullable=False)
+        mae = db.Column(db.Float, nullable=False)
+        rmse = db.Column(db.Float, nullable=False)
+        detailed_metrics = db.Column(db.JSON, nullable=False)
+    
+    return Prediction, ModelPerformance
+
+# Initialize models
+Prediction, ModelPerformance = define_models()
