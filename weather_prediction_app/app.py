@@ -950,9 +950,603 @@ def cache_cleanup_task():
         predictor.clear_old_cache()
         print("Cleared old cache entries")
 
+
+
+
+
+
+
+
+
+
 # Start the background cleanup thread
 cache_thread = threading.Thread(target=cache_cleanup_task, daemon=True)
 cache_thread.start()
+
+
+@app.route('/history/<city>', methods=['GET'])
+def get_history(city):
+    """Get historical predictions for analysis"""
+    try:
+        # Get the last 30 days of predictions
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=30)
+
+        predictions = Prediction.query.filter(
+            Prediction.city == city,
+            Prediction.prediction_date >= start_date,
+            Prediction.prediction_date <= end_date
+        ).order_by(Prediction.prediction_date.asc()).all()
+
+        if not predictions:
+            return jsonify({
+                'success': False,
+                'error': 'No historical data found'
+            })
+
+        # Format the response
+        result = []
+        for pred in predictions:
+            result.append({
+                'prediction_date': pred.prediction_date.isoformat(),
+                'generation_timestamp': pred.generation_timestamp.isoformat(),
+                'model_version': pred.model_version,
+                'min_temp': pred.min_temp,
+                'max_temp': pred.max_temp,
+                'avg_temp': pred.avg_temp,
+                'humidity': pred.humidity,
+                'wind_speed': pred.wind_speed,
+                'condition': pred.condition
+            })
+
+        return jsonify({
+            'success': True,
+            'city': city,
+            'predictions': result
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/performance/<city>', methods=['GET'])
+def get_performance(city):
+    """Get model performance history"""
+    try:
+        performances = ModelPerformance.query.filter_by(
+            city=city
+        ).order_by(ModelPerformance.timestamp.desc()).limit(10).all()
+
+        if not performances:
+            return jsonify({
+                'success': False,
+                'error': 'No performance data found'
+            })
+
+        # Format the response
+        result = []
+        for perf in performances:
+            result.append({
+                'timestamp': perf.timestamp.isoformat(),
+                'model_name': perf.model_name,
+                'r2_score': perf.r2_score,
+                'mae': perf.mae,
+                'rmse': perf.rmse,
+                'detailed_metrics': perf.detailed_metrics
+            })
+
+        return jsonify({
+            'success': True,
+            'city': city,
+            'performances': result
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/check-schema')
+def check_schema():
+    """Check the database schema"""
+    try:
+        conn = sqlite3.connect('weather_predictions.db')
+        cursor = conn.cursor()
+
+        # Check predictions table columns
+        cursor.execute("PRAGMA table_info(predictions)")
+        columns = cursor.fetchall()
+
+        conn.close()
+
+        column_names = [col[1] for col in columns]
+        return jsonify({
+            'success': True,
+            'columns': column_names,
+            'has_is_current': 'is_current' in column_names,
+            'has_version': 'version' in column_names
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+
+@app.route('/debug-history')
+def debug_history():
+    """Debug route to see all historical data"""
+    try:
+        # Get all predictions for a city
+        predictions = Prediction.query.filter_by(city='Amman').order_by(
+            Prediction.prediction_date.asc(),
+            Prediction.version.desc()
+        ).all()
+
+        result = []
+        for pred in predictions:
+            result.append({
+                'date': pred.prediction_date.isoformat(),
+                'generated': pred.generation_timestamp.isoformat(),
+                'version': pred.version,
+                'is_current': pred.is_current,
+                'avg_temp': pred.avg_temp,
+                'model': pred.model_version
+            })
+
+        return jsonify({
+            'success': True,
+            'predictions': result,
+            'total_count': len(predictions),
+            'current_count': len([p for p in predictions if p.is_current])
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/debug-db')
+def debug_db():
+    """Debug database state"""
+    try:
+        # Check all predictions
+        all_predictions = Prediction.query.all()
+        predictions_data = []
+        for p in all_predictions:
+            predictions_data.append({
+                'id': p.id,
+                'city': p.city,
+                'date': p.prediction_date.isoformat(),
+                'generated': p.generation_timestamp.isoformat(),
+                'is_current': p.is_current,
+                'version': p.version,
+                'model': p.model_version
+            })
+
+        # Check performance data
+        all_performance = ModelPerformance.query.all()
+        performance_data = []
+        for p in all_performance:
+            performance_data.append({
+                'id': p.id,
+                'city': p.city,
+                'timestamp': p.timestamp.isoformat(),
+                'model': p.model_name,
+                'r2': p.r2_score,
+                'has_detailed_metrics': bool(p.detailed_metrics)
+            })
+
+        return jsonify({
+            'predictions': predictions_data,
+            'performance': performance_data,
+            'prediction_count': len(predictions_data),
+            'performance_count': len(performance_data)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
+@app.route('/fix-metrics')
+def fix_metrics():
+    """Fix existing performance records with 0 R² scores"""
+    try:
+        performances = ModelPerformance.query.filter(
+            ModelPerformance.r2_score == 0
+        ).all()
+
+        fixed_count = 0
+        for perf in performances:
+            if perf.detailed_metrics:
+                r2_scores = []
+                for param_metrics in perf.detailed_metrics.values():
+                    if isinstance(param_metrics, dict) and 'r2' in param_metrics:
+                        r2_scores.append(param_metrics['r2'])
+                if r2_scores:
+                    perf.r2_score = sum(r2_scores) / len(r2_scores)
+                    fixed_count += 1
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f'Fixed {fixed_count} performance records'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/debug-metrics/<city>')
+def debug_metrics(city):
+    """Debug metrics for a city"""
+    try:
+        performances = ModelPerformance.query.filter_by(
+            city=city
+        ).order_by(ModelPerformance.timestamp.desc()).all()
+
+        result = []
+        for perf in performances:
+            result.append({
+                'timestamp': perf.timestamp.isoformat(),
+                'model': perf.model_name,
+                'r2_score': perf.r2_score,
+                'has_detailed_metrics': bool(perf.detailed_metrics),
+                'detailed_metrics_keys': list(perf.detailed_metrics.keys()) if perf.detailed_metrics else []
+            })
+
+        return jsonify({
+            'success': True,
+            'performances': result
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/historical-data/<city>', methods=['GET'])
+def get_historical_data(city):
+    """Get historical weather data for analysis"""
+    try:
+        # Get date range from query parameters or use default
+        days = request.args.get('days', 30, type=int)
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days)
+
+        # Get historical predictions
+        predictions = Prediction.query.filter(
+            Prediction.city == city,
+            Prediction.prediction_date >= start_date,
+            Prediction.prediction_date <= end_date,
+            Prediction.is_current == True  # Only get the most recent predictions for each date
+        ).order_by(Prediction.prediction_date.asc()).all()
+
+        if not predictions:
+            return jsonify({
+                'success': False,
+                'error': 'No historical data found for this city'
+            })
+
+        # Format the response
+        result = []
+        for pred in predictions:
+            result.append({
+                'date': pred.prediction_date.isoformat(),
+                'min_temp': pred.min_temp,
+                'max_temp': pred.max_temp,
+                'avg_temp': pred.avg_temp,
+                'humidity': pred.humidity,
+                'wind_speed': pred.wind_speed,
+                'condition': pred.condition,
+                'model_version': pred.model_version,
+                'generated_at': pred.generation_timestamp.isoformat()
+            })
+
+        return jsonify({
+            'success': True,
+            'city': city,
+            'data': result,
+            'date_range': {
+                'start': start_date.isoformat(),
+                'end': end_date.isoformat()
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/historical-performance/<city>', methods=['GET'])
+def get_historical_performance(city):
+    """Get historical model performance data"""
+    try:
+        # Get limit from query parameters or use default
+        limit = request.args.get('limit', 10, type=int)
+
+        performances = ModelPerformance.query.filter_by(
+            city=city
+        ).order_by(ModelPerformance.timestamp.desc()).limit(limit).all()
+
+        if not performances:
+            return jsonify({
+                'success': False,
+                'error': 'No performance data found for this city'
+            })
+
+        # Format the response
+        result = []
+        for perf in performances:
+            result.append({
+                'timestamp': perf.timestamp.isoformat(),
+                'model_name': perf.model_name,
+                'r2_score': perf.r2_score,
+                'mae': perf.mae,
+                'rmse': perf.rmse,
+                'detailed_metrics': perf.detailed_metrics
+            })
+
+        return jsonify({
+            'success': True,
+            'city': city,
+            'performances': result
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+import csv
+from io import StringIO
+from flask import make_response
+
+
+@app.route('/download-historical-data/<city>', methods=['GET'])
+def download_historical_data(city):
+    """Download historical weather data as CSV"""
+    try:
+        # Get days parameter or default to 30
+        days = request.args.get('days', 30, type=int)
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days)
+
+        # Get historical predictions
+        predictions = Prediction.query.filter(
+            Prediction.city == city,
+            Prediction.prediction_date >= start_date,
+            Prediction.prediction_date <= end_date,
+            Prediction.is_current == True
+        ).order_by(Prediction.prediction_date.asc()).all()
+
+        if not predictions:
+            return jsonify({
+                'success': False,
+                'error': 'No historical data found for this city'
+            })
+
+        # Create CSV in memory
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow([
+            'Date', 'Min Temperature (°C)', 'Max Temperature (°C)',
+            'Average Temperature (°C)', 'Humidity (%)',
+            'Wind Speed (km/h)', 'Weather Condition', 'Model Version',
+            'Prediction Generated At'
+        ])
+
+        # Write data rows
+        for pred in predictions:
+            writer.writerow([
+                pred.prediction_date.strftime('%Y-%m-%d'),
+                pred.min_temp,
+                pred.max_temp,
+                pred.avg_temp,
+                pred.humidity,
+                pred.wind_speed,
+                pred.condition,
+                pred.model_version,
+                pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+
+        # Create response
+        output.seek(0)
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename={city}_weather_data.csv'
+        response.headers['Content-type'] = 'text/csv'
+        return response
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/download-performance-data/<city>', methods=['GET'])
+def download_performance_data(city):
+    """Download model performance data as CSV"""
+    try:
+        # Get limit parameter
+        limit = request.args.get('limit', 50, type=int)
+
+        # Get performance data
+        if limit == 'all':
+            performances = ModelPerformance.query.filter_by(city=city).all()
+        else:
+            performances = ModelPerformance.query.filter_by(
+                city=city
+            ).order_by(ModelPerformance.timestamp.desc()).limit(limit).all()
+
+        if not performances:
+            return jsonify({
+                'success': False,
+                'error': 'No performance data found for this city'
+            })
+
+        # Create CSV in memory
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow([
+            'Timestamp', 'Model Name', 'R² Score', 'MAE', 'RMSE',
+            'Avg Temp R²', 'Min Temp R²', 'Max Temp R²',
+            'Humidity R²', 'Wind Speed R²'
+        ])
+
+        # Write data rows
+        for perf in performances:
+            metrics = perf.detailed_metrics or {}
+
+            writer.writerow([
+                perf.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                perf.model_name,
+                perf.r2_score,
+                perf.mae,
+                perf.rmse,
+                metrics.get('avg_c', {}).get('r2', 'N/A'),
+                metrics.get('min_c', {}).get('r2', 'N/A'),
+                metrics.get('max_c', {}).get('r2', 'N/A'),
+                metrics.get('humidity', {}).get('r2', 'N/A'),
+                metrics.get('wind_kph', {}).get('r2', 'N/A')
+            ])
+
+        # Create response
+        output.seek(0)
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename={city}_model_performance.csv'
+        response.headers['Content-type'] = 'text/csv'
+        return response
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/download-all-weather-data/<city>', methods=['GET'])
+def download_all_weather_data(city):
+    """Download ALL historical weather data as CSV from database"""
+    try:
+        # Get ALL historical predictions for this city
+        predictions = Prediction.query.filter(
+            Prediction.city == city,
+            Prediction.is_current == True
+        ).order_by(Prediction.prediction_date.asc()).all()
+
+        if not predictions:
+            return jsonify({
+                'success': False,
+                'error': 'No historical data found for this city'
+            })
+
+        # Create CSV in memory
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow([
+            'Date', 'Min Temperature (°C)', 'Max Temperature (°C)',
+            'Average Temperature (°C)', 'Humidity (%)',
+            'Wind Speed (km/h)', 'Weather Condition', 'Model Version',
+            'Prediction Generated At', 'Version'
+        ])
+
+        # Write data rows
+        for pred in predictions:
+            writer.writerow([
+                pred.prediction_date.strftime('%Y-%m-%d'),
+                pred.min_temp,
+                pred.max_temp,
+                pred.avg_temp,
+                pred.humidity,
+                pred.wind_speed,
+                pred.condition,
+                pred.model_version,
+                pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                pred.version
+            ])
+
+        # Create response
+        output.seek(0)
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename={city}_all_weather_data.csv'
+        response.headers['Content-type'] = 'text/csv'
+        return response
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@app.route('/download-all-performance-data/<city>', methods=['GET'])
+def download_all_performance_data(city):
+    """Download ALL model performance data as CSV from database"""
+    try:
+        # Get ALL performance data for this city
+        performances = ModelPerformance.query.filter_by(city=city).order_by(ModelPerformance.timestamp.desc()).all()
+
+        if not performances:
+            return jsonify({
+                'success': False,
+                'error': 'No performance data found for this city'
+            })
+
+        # Create CSV in memory
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write header
+        writer.writerow([
+            'Timestamp', 'Model Name', 'R² Score', 'MAE', 'RMSE',
+            'Avg Temp R²', 'Min Temp R²', 'Max Temp R²',
+            'Humidity R²', 'Wind Speed R²'
+        ])
+
+        # Write data rows
+        for perf in performances:
+            metrics = perf.detailed_metrics or {}
+
+            writer.writerow([
+                perf.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                perf.model_name,
+                perf.r2_score,
+                perf.mae,
+                perf.rmse,
+                metrics.get('avg_c', {}).get('r2', 'N/A'),
+                metrics.get('min_c', {}).get('r2', 'N/A'),
+                metrics.get('max_c', {}).get('r2', 'N/A'),
+                metrics.get('humidity', {}).get('r2', 'N/A'),
+                metrics.get('wind_kph', {}).get('r2', 'N/A')
+            ])
+
+        # Create response
+        output.seek(0)
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename={city}_all_model_performance.csv'
+        response.headers['Content-type'] = 'text/csv'
+        return response
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+
+
+
+
+
+
+
+
 
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
