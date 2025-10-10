@@ -8,3 +8,6 @@ xgboost==1.7.6
 lightgbm==4.0.0
 Werkzeug==2.3.7
 gunicorn==21.2.0
+setuptools>=65.5.0
+wheel
+
