@@ -34,10 +34,6 @@ np.random.seed(42)
 
 app = Flask(__name__) #Creates a Flask web application instance (initializes a new Flask app)
 
-class Base(DeclarativeBase): #This sets up the foundation for defining database tables as Python classes, which SQLAlchemy will map to the database.
-    pass
-
-db = SQLAlchemy(model_class=Base) # This sets up SQLAlchemy to manage the database using the custom Base class
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
 app.config["SQLALCHEMY_ECHO"] = False # set to False to avoid cluttering logs with SQL statements (to not ,make the output tab a mess).
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False # reducing memory usage and improving performance
@@ -50,32 +46,6 @@ API_KEY = "245159b18d634837900112029250310"
 BASE_URL = "https://api.weatherapi.com/v1"
 
 # Database Models
-class Prediction(db.Model):
-    __tablename__ = "predictions"
-
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    prediction_date = db.Column(db.Date, nullable=False)  # The date being predicted
-    generation_timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_version = db.Column(db.String(50), nullable=False)
-
-    # Prediction values
-    min_temp = db.Column(db.Float, nullable=False)
-    max_temp = db.Column(db.Float, nullable=False)
-    avg_temp = db.Column(db.Float, nullable=False)
-    humidity = db.Column(db.Float, nullable=False)
-    wind_speed = db.Column(db.Float, nullable=False)
-    condition = db.Column(db.String(100), nullable=False)
-
-    #for historical tracking
-    is_current = db.Column(db.Boolean, default=True)  # Mark most recent prediction
-    version = db.Column(db.Integer, default=1)  # Version number
-
-    # Index for faster queries (speed boosters)
-    __table_args__ = (
-        db.Index('idx_city_date', 'city', 'prediction_date'),
-        db.Index('idx_generation_timestamp', 'generation_timestamp'),
-    )
 
 
 class ModelPerformance(db.Model):
