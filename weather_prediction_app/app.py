@@ -45,23 +45,6 @@ db.init_app(app)
 API_KEY = "245159b18d634837900112029250310"
 BASE_URL = "https://api.weatherapi.com/v1"
 
-# Database Models
-
-
-class ModelPerformance(db.Model):
-    __tablename__ = "model_performance"
-
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_name = db.Column(db.String(50), nullable=False)
-    r2_score = db.Column(db.Float, nullable=False)
-    mae = db.Column(db.Float, nullable=False)
-    rmse = db.Column(db.Float, nullable=False)
-
-    # Detailed metrics (stored as JSON)
-    detailed_metrics = db.Column(db.JSON, nullable=False)
-
 
 class WeatherPredictor:
     def __init__(self):
