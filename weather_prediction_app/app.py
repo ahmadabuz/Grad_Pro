@@ -48,49 +48,62 @@ db.init_app(app)
 API_KEY = "245159b18d634837900112029250310"
 BASE_URL = "https://api.weatherapi.com/v1"
 
-# Database Models
-class Prediction(db.Model):
-    __tablename__ = "predictions"
+# Add this flag to prevent duplicate model registration
+_models_initialized = False
 
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    prediction_date = db.Column(db.Date, nullable=False)  # The date being predicted
-    generation_timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_version = db.Column(db.String(50), nullable=False)
+def init_models():
+    global _models_initialized
+    if _models_initialized:
+        return
+    
+    _models_initialized = True
+    
+    # Database Models
+    class Prediction(db.Model):
+        __tablename__ = "predictions"
 
-    # Prediction values
-    min_temp = db.Column(db.Float, nullable=False)
-    max_temp = db.Column(db.Float, nullable=False)
-    avg_temp = db.Column(db.Float, nullable=False)
-    humidity = db.Column(db.Float, nullable=False)
-    wind_speed = db.Column(db.Float, nullable=False)
-    condition = db.Column(db.String(100), nullable=False)
+        id = db.Column(db.Integer, primary_key=True)
+        city = db.Column(db.String(100), nullable=False)
+        prediction_date = db.Column(db.Date, nullable=False)  # The date being predicted
+        generation_timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
+        model_version = db.Column(db.String(50), nullable=False)
 
-    #for historical tracking
-    is_current = db.Column(db.Boolean, default=True)  # Mark most recent prediction
-    version = db.Column(db.Integer, default=1)  # Version number
+        # Prediction values
+        min_temp = db.Column(db.Float, nullable=False)
+        max_temp = db.Column(db.Float, nullable=False)
+        avg_temp = db.Column(db.Float, nullable=False)
+        humidity = db.Column(db.Float, nullable=False)
+        wind_speed = db.Column(db.Float, nullable=False)
+        condition = db.Column(db.String(100), nullable=False)
 
-    # Index for faster queries (speed boosters)
-    __table_args__ = (
-        db.Index('idx_city_date', 'city', 'prediction_date'),
-        db.Index('idx_generation_timestamp', 'generation_timestamp'),
-    )
+        #for historical tracking
+        is_current = db.Column(db.Boolean, default=True)  # Mark most recent prediction
+        version = db.Column(db.Integer, default=1)  # Version number
+
+        # Index for faster queries (speed boosters)
+        __table_args__ = (
+            db.Index('idx_city_date', 'city', 'prediction_date'),
+            db.Index('idx_generation_timestamp', 'generation_timestamp'),
+        )
 
 
-class ModelPerformance(db.Model):
-    __tablename__ = "model_performance"
+    class ModelPerformance(db.Model):
+        __tablename__ = "model_performance"
 
-    id = db.Column(db.Integer, primary_key=True)
-    city = db.Column(db.String(100), nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    model_name = db.Column(db.String(50), nullable=False)
-    r2_score = db.Column(db.Float, nullable=False)
-    mae = db.Column(db.Float, nullable=False)
-    rmse = db.Column(db.Float, nullable=False)
+        id = db.Column(db.Integer, primary_key=True)
+        city = db.Column(db.String(100), nullable=False)
+        timestamp = db.Column(db.DateTime, nullable=False, default=datetime.now)
+        model_name = db.Column(db.String(50), nullable=False)
+        r2_score = db.Column(db.Float, nullable=False)
+        mae = db.Column(db.Float, nullable=False)
+        rmse = db.Column(db.Float, nullable=False)
 
-    # Detailed metrics (stored as JSON)
-    detailed_metrics = db.Column(db.JSON, nullable=False)
+        # Detailed metrics (stored as JSON)
+        detailed_metrics = db.Column(db.JSON, nullable=False)
 
+# Initialize models
+with app.app_context():
+    init_models()
 
 class WeatherPredictor:
     def __init__(self):
@@ -119,7 +132,7 @@ class WeatherPredictor:
         """Save a prediction to the cache."""
         with self.cache_lock:
             # Limit cache size to prevent memory issues
-            if len(self.cache) > 50: # If the cache already has more than 50 entries, it deletes the oldest one (so memory doesn’t explode).
+            if len(self.cache) > 50: # If the cache already has more than 50 entries, it deletes the oldest one (so memory doesn't explode).
                 # Remove oldest entry
                 oldest_key = next(iter(self.cache))
                 del self.cache[oldest_key]
@@ -445,17 +458,6 @@ class WeatherPredictor:
                 if row['avg_temp'] > row['max_temp']:
                     predictions_df.at[i, 'avg_temp'] = (row['min_temp'] + row['max_temp']) / 2
 
-
-
-
-
-
-
-
-
-
-
-
             future_dates = [last_date + timedelta(days=i + 1) for i in range(days)]
             predictions_df['date'] = future_dates
             predictions_df['date'] = pd.to_datetime(predictions_df['date'].dt.strftime('%Y-%m-%d'))
@@ -727,53 +729,12 @@ def init_db():
             # Ensure instance folder exists
             ensure_instance_folder()
 
-            # First, check if the predictions table exists
-            # Use the correct path for direct SQLite connection
-            db_path = os.path.join('instance', 'weather_predictions.db')
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-
-            # Check if table exists
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='predictions'")
-            table_exists = cursor.fetchone() is not None
-
-            if table_exists:
-                # Get existing columns
-                cursor.execute("PRAGMA table_info(predictions)")
-                existing_columns = [column[1] for column in cursor.fetchall()]
-
-                # Add is_current column if it doesn't exist
-                if 'is_current' not in existing_columns:
-                    cursor.execute('ALTER TABLE predictions ADD COLUMN is_current BOOLEAN DEFAULT TRUE')
-                    print("✓ Added is_current column to predictions table")
-
-                # Add version column if it doesn't exist
-                if 'version' not in existing_columns:
-                    cursor.execute('ALTER TABLE predictions ADD COLUMN version INTEGER DEFAULT 1')
-                    print("✓ Added version column to predictions table")
-
-                # Update existing records to have is_current = True and version = 1
-                cursor.execute('UPDATE predictions SET is_current = TRUE, version = 1 WHERE is_current IS NULL')
-                print("✓ Updated existing records with default values")
-            else:
-                # Table doesn't exist, create it with all columns
-                db.create_all()
-                print("✓ Created predictions table with all columns")
-
-            conn.commit()
-            conn.close()
+            # Create all tables
+            db.create_all()
+            print("✓ Database tables created successfully")
 
         except Exception as e:
-            print(f"Database modification error: {e}")
-            # Try to create tables if connection failed
-            try:
-                db.create_all()
-                print("✓ Created database tables using SQLAlchemy")
-            except Exception as e2:
-                print(f"Error creating tables: {e2}")
-
-        print("Database initialization completed successfully")
-
+            print(f"Database initialization error: {e}")
 
 def save_predictions_to_db(city, predictions, model_name, model_metrics):
     """Save predictions to the database, preserving historical data"""
@@ -910,16 +871,6 @@ def get_latest_predictions_from_db(city, days=7):
     except Exception as e:
         print(f"Error retrieving from database: {e}")
         return None
-
-
-
-
-
-
-
-
-
-
 
 # Initialize predictor
 predictor = WeatherPredictor()
@@ -1219,22 +1170,6 @@ def get_performance(city):
             'success': False,
             'error': str(e)
         })
-
-'''
-@app.route('/reset-db')
-def reset_db():
-    """Temporary route to reset the database with new schema"""
-    try:
-        with app.app_context():
-            db.drop_all()
-            db.create_all()
-            print("Database reset successfully")
-            return jsonify({'success': True, 'message': 'Database reset successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-'''
-
-
 
 @app.route('/check-schema')
 def check_schema():
@@ -1727,13 +1662,9 @@ def download_all_performance_data(city):
             'error': str(e)
         })
 
+# Initialize database
 init_db()
-with app.app_context():
-    from sqlalchemy import inspect
 
-    inspector = inspect(db.engine)
-    print(inspector.get_columns("predictions"))
-    print(inspector.get_columns("model_performance"))
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     if not os.path.exists('templates'):
