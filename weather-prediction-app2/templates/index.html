@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkySense - Advanced Weather Intelligence</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.4/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.2.0/dist/chartjs-adapter-luxon.min.js"></script>
+  <style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Open Sans', sans-serif;
+    min-height: 100vh;
+    color: #fff;
+    background: linear-gradient(to bottom, #1a2980, #26d0ce);
+    position: relative;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  /* Header styling */
+  .header { 
+    text-align: center; 
+    margin-bottom: 40px;
+    padding: 20px 0;
+  }
+  
+  .logo {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 3.8rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 1px;
+    position: relative;
+    display: inline-block;
+    margin-bottom: 10px;
+  }
+  
+  .logo::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(to right, #667eea, #764ba2);
+    border-radius: 2px;
+  }
+  
+  .logo span:first-child {
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+  
+  .logo span:last-child {
+    color: #f8f9fa;
+    font-weight: 600;
+    position: relative;
+  }
+  
+  .header p { 
+    font-size: 1.3rem; 
+    margin-top: 15px; 
+    color: rgba(255,255,255,0.9); 
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+  }
+
+  /* Tab navigation */
+  .tab-navigation {
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 30px;
+    display: none;
+    gap: 10px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .tab-button {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.8);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .tab-button.active {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+
+  .tab-button:hover:not(.active) {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Error message styling */
+  .error-message {
+    background: rgba(220, 53, 69, 0.9);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 20px 0;
+    display: none;
+    text-align: center;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+  }
+
+  /* Success message styling */
+  .success-message {
+    background: rgba(40, 167, 69, 0.9);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin: 10px 0;
+    text-align: center;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Form styling */
+  .prediction-form {
+    background: rgba(255,255,255,0.95);
+    color: #333;
+    padding: 35px;
+    border-radius: 16px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+    margin-bottom: 40px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+  }
+  
+  .prediction-form:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+  }
+
+  .form-group { 
+    margin-bottom: 25px; 
+  }
+  
+  label { 
+    display: block; 
+    margin-bottom: 10px; 
+    font-weight: 600; 
+    color: #2d3748;
+    font-family: 'Montserrat', sans-serif;
+  }
+  
+  input, select {
+    width: 100%; 
+    padding: 14px; 
+    border-radius: 10px; 
+    border: 2px solid #e2e8f0; 
+    font-size: 16px;
+    transition: all 0.3s;
+    font-family: 'Open Sans', sans-serif;
+  }
+  
+  input:focus, select:focus { 
+    outline: none; 
+    border-color: #667eea; 
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  }
+
+  .predict-btn {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff; 
+    padding: 16px; 
+    font-size: 17px; 
+    font-weight: 600;
+    border: none; 
+    border-radius: 10px; 
+    width: 100%; 
+    cursor: pointer; 
+    transition: all 0.3s;
+    font-family: 'Montserrat', sans-serif;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  
+  .predict-btn:hover { 
+    transform: translateY(-3px); 
+    box-shadow: 0 7px 14px rgba(102, 126, 234, 0.4);
+  }
+  
+  .predict-btn:active {
+    transform: translateY(1px);
+  }
+  
+  .predict-btn:disabled { 
+    background: #cbd5e0; 
+    cursor: not-allowed; 
+    transform: none; 
+    box-shadow: none;
+  }
+
+  /* Download button styling */
+  .download-btn {
+    color: #fff;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: 'Montserrat', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 250px;
+    justify-content: center;
+  }
+
+  .download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  }
+
+  .download-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .download-btn:active {
+    transform: translateY(0);
+  }
+
+  /* Loading indicator */
+  #loading-indicator {
+    display: none;
+    text-align: center;
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 10px;
+    color: #333;
+    font-size: 1.1rem;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+  
+  .spinner {
+    border: 5px solid rgba(102, 126, 234, 0.3);
+    border-top: 5px solid #667eea;
+    border-radius: 50%;
+    width: 40px; 
+    height: 40px;
+    animation: spin 1.5s linear infinite;
+    margin: 0 auto 15px;
+  }
+  
+  @keyframes spin { 
+   0% { transform: rotate(0deg); } 
+   100% { transform: rotate(360deg); }
+  }
+
+  /* Results section */
+  .results { 
+    display: none; 
+    margin-top: 30px;
+    animation: fadeIn 0.5s ease;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card {
+    background: rgba(255, 255, 255, 0.95);
+    color: #2d3748; 
+    padding: 30px; 
+    border-radius: 16px; 
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
+    margin-bottom: 30px;
+    transition: transform 0.3s ease;
+  }
+  
+  .card:hover {
+    transform: translateY(-5px);
+  }
+  
+  .card h3 { 
+    color: #667eea; 
+    margin-bottom: 20px; 
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Dashboard grid */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    margin-bottom: 30px;
+  }
+  
+  .dashboard-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    text-align: center;
+  }
+  
+  .dashboard-card h4 {
+    color: #667eea;
+    margin-bottom: 15px;
+    font-family: 'Montserrat', sans-serif;
+  }
+  
+  .stat-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 10px 0;
+  }
+  
+  .stat-label {
+    color: #718096;
+    font-size: 0.9rem;
+  }
+  
+  .weather-icon {
+    font-size: 3rem;
+    margin: 15px 0;
+    color: #667eea;
+  }
+
+  /* Enhanced Advice Section Styles */
+  .advice-section {
+    margin-bottom: 30px;
+  }
+
+  .advice-categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 25px;
+  }
+
+  .advice-category {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+  }
+
+  .advice-category:hover {
+    transform: translateY(-5px);
+  }
+
+  .advice-category h4 {
+    color: #667eea;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .advice-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .advice-list li {
+    background: #f8f9ff;
+    padding: 15px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+    color: #2d3748;
+    line-height: 1.5;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    transition: all 0.2s ease;
+  }
+
+  .advice-list li:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+  }
+
+  .advice-list li:last-child {
+    margin-bottom: 0;
+  }
+
+  .advice-icon {
+    color: #667eea;
+    font-size: 1.1rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  .warning-advice {
+    border-left-color: #e53e3e;
+    background: #fff5f5;
+  }
+
+  .warning-advice .advice-icon {
+    color: #e53e3e;
+  }
+
+  .info-advice {
+    border-left-color: #3182ce;
+    background: #ebf8ff;
+  }
+
+  .info-advice .advice-icon {
+    color: #3182ce;
+  }
+
+  .success-advice {
+    border-left-color: #38a169;
+    background: #f0fff4;
+  }
+
+  .success-advice .advice-icon {
+    color: #38a169;
+  }
+
+  .advice-details {
+    font-size: 0.85rem;
+    color: #718096;
+    margin-top: 5px;
+    line-height: 1.4;
+    font-style: italic;
+  }
+
+  /* Chart containers */
+  .chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+    margin: 20px 0;
+  }
+  
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+  }
+  
+  @media (max-width: 968px) {
+    .chart-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-top: 15px;
+    font-size: 0.95rem;
+  }
+  
+  th, td { 
+    padding: 14px; 
+    text-align: left; 
+    border-bottom: 1px solid #e2e8f0; 
+  }
+  
+  th { 
+    background: #f7fafc; 
+    color: #4a5568; 
+    font-weight: 600; 
+    font-family: 'Montserrat', sans-serif;
+  }
+  
+  tbody tr:hover { 
+    background: #f8fafc; 
+  }
+
+  .condition-badge {
+    background: linear-gradient(to right, #667eea, #764ba2);
+    color: #fff; 
+    padding: 6px 14px; 
+    border-radius: 20px; 
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-block;
+  }
+  
+  img#forecast-chart { 
+    width: 100%; 
+    border-radius: 12px; 
+    margin-top: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+
+  /* Historical Data Styles */
+  #historical-results {
+    margin-top: 40px;
+  }
+
+  /* Interval Controls Styles */
+  .interval-controls {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 10px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+  }
+  
+  .interval-controls label {
+    display: inline-block;
+    margin-right: 10px;
+    font-weight: 600;
+    color: #2d3748;
+    font-family: 'Montserrat', sans-serif;
+  }
+  
+  .interval-select {
+    display: inline-block;
+    width: auto;
+    min-width: 180px;
+    padding: 8px 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    color: #2d3748;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .interval-select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  }
+  
+  .interval-select:hover {
+    border-color: #667eea;
+  }
+
+  /* Download buttons container */
+  .download-buttons {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Model Performance Explanation Styles */
+  .metric-explanation {
+    background: #f8f9ff;
+    border-left: 4px solid #667eea;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #4a5568;
+  }
+
+  .metric-explanation strong {
+    color: #2d3748;
+    font-weight: 600;
+  }
+
+  .metric-explanation ul {
+    margin-top: 10px;
+    padding-left: 20px;
+  }
+
+  .metric-explanation li {
+    margin-bottom: 8px;
+  }
+
+  /* Download message styling */
+  .download-message {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    margin: 20px 0;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    border: 2px dashed #667eea;
+  }
+
+  .download-message h4 {
+    color: #667eea;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+  }
+
+  .download-message p {
+    color: #4a5568;
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+
+  /* Responsive design */
+  @media (max-width: 768px) {
+    .tab-navigation {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    
+    .tab-button {
+      font-size: 12px;
+      padding: 10px 16px;
+      min-width: 120px;
+    }
+    
+    .logo { 
+      font-size: 2.8rem; 
+    }
+    
+    .header p {
+      font-size: 1.1rem;
+    }
+    
+    .prediction-form {
+      padding: 25px;
+    }
+    
+    .card {
+      padding: 20px;
+    }
+    
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .advice-categories {
+      grid-template-columns: 1fr;
+    }
+    
+    .download-buttons {
+      flex-direction: column;
+    }
+    
+    .download-btn {
+      min-width: 100%;
+    }
+    
+    th, td {
+      padding: 10px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .tab-navigation {
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .logo {
+      font-size: 2.2rem;
+    }
+    
+    .header p {
+      font-size: 1rem;
+    }
+    
+    table {
+      font-size: 0.8rem;
+    }
+    
+    th, td {
+      padding: 8px 6px;
+    }
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 50px;
+    padding: 20px 0;
+    color: rgba(255,255,255,0.7);
+    font-size: 0.9rem;
+  }
+
+  /* Intro overlay */
+  #intro {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: linear-gradient(to bottom, #1a2980, #26d0ce);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 99999;
+    flex-direction: column;
+    color: #fff;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 4rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+  }
+
+  #intro-text {
+    border-right: 3px solid rgba(255,255,255,0.95);
+    padding-right: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    line-height: 1.2;
+  }
+
+  /* Data source indicator */
+  #data-source-indicator {
+    text-align: center;
+    margin: 15px 0;
+    color: rgba(255,255,255,0.9);
+    font-size: 0.95rem;
+    background: rgba(0,0,0,0.2);
+    padding: 8px 15px;
+    border-radius: 20px;
+    display: inline-block;
+    margin-left: 50%;
+    transform: translateX(-50%);
+  }  
+
+  #intro.fade-out {
+    animation: introFadeOut 800ms ease forwards;
+  }
+  @keyframes introFadeOut {
+    to { opacity: 0; visibility: hidden; transform: translateY(-10px); }
+  }
+
+  /* hide page content initially, then reveal when .site-visible is added to body */
+  .container {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 700ms ease, transform 700ms ease;
+  }
+  .site-visible .container {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  /* header logo initial + reveal animation */
+  .header .logo {
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 700ms ease, transform 700ms ease;
+  }
+  .site-visible .header .logo {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  </style>
+</head>
+<body>
+  <!-- Intro overlay -->
+  <div id="intro" role="banner" aria-hidden="false">
+    <div id="intro-text" aria-hidden="true"></div>
+  </div>
+
+  <div class="container">
+    <div class="header">
+      <div class="logo"><span>Sky</span><span>Sense</span></div>
+      <p>Advanced AI-powered weather forecasting with predictive analytics</p>
+    </div>
+
+    <!-- Error message container -->
+    <div class="error-message" id="error-message"></div>
+
+    <div class="prediction-form">
+      <div class="form-group">
+        <label for="city"><i class="fas fa-city"></i> Enter City Name:</label>
+        <input type="text" id="city-search" placeholder="Type at least 2 letters to search...">
+        <select id="city">
+          <option value="">-- Select a city --</option>
+        </select>
+      </div>
+      <button class="predict-btn" id="predictBtn">
+        <i class="fas fa-cloud-sun"></i> Generate Weather Prediction
+      </button>
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="loading-indicator">
+      <div class="spinner"></div>
+      <div>Analyzing meteorological data and generating predictions...</div>
+    </div>
+
+    <!-- Data source indicator -->
+    <div id="data-source-indicator">
+      <small>Data source: <span id="source-type">Newly generated</span></small>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-navigation" id="tab-navigation">
+      <button class="tab-button active" data-tab="predictions">
+        <i class="fas fa-chart-line"></i> Predictions
+      </button>
+      <button class="tab-button" data-tab="performance">
+        <i class="fas fa-brain"></i> Model Performance
+      </button>
+      <button class="tab-button" data-tab="advice">
+        <i class="fas fa-lightbulb"></i> Weather Advice
+      </button>
+    </div>
+
+    <!-- Predictions Tab -->
+    <div class="tab-content active" id="predictions-content">
+      <div class="results" id="results">
+        <!-- Dashboard Cards -->
+        <div class="dashboard-grid">
+          <div class="dashboard-card">
+            <h4><i class="fas fa-thermometer-half"></i> Average Temperature</h4>
+            <div class="weather-icon" id="avg-temp-icon">🌡️</div>
+            <div class="stat-value" id="avg-temp-value">--°C</div>
+            <div class="stat-label">Next 7 days</div>
+          </div>
+          
+          <div class="dashboard-card">
+            <h4><i class="fas fa-tint"></i> Humidity</h4>
+            <div class="weather-icon" id="humidity-icon">💧</div>
+            <div class="stat-value" id="humidity-value">--%</div>
+            <div class="stat-label">Average level</div>
+          </div>
+          
+          <div class="dashboard-card">
+            <h4><i class="fas fa-wind"></i> Wind Speed</h4>
+            <div class="weather-icon" id="wind-icon">💨</div>
+            <div class="stat-value" id="wind-value">-- km/h</div>
+            <div class="stat-label">Average speed</div>
+          </div>
+          
+          <div class="dashboard-card">
+            <h4><i class="fas fa-chart-line"></i> Model Performance</h4>
+            <div class="weather-icon" id="accuracy-icon">📈</div>
+            <div class="stat-value" id="accuracy-value">--%</div>
+            <div class="stat-label">R² Score</div>
+          </div>
+        </div>
+
+        <!-- Chart Grid -->
+        <div class="chart-grid">
+          <div class="card">
+            <h3><i class="fas fa-temperature-high"></i> Temperature Forecast</h3>
+            <div class="chart-container">
+              <canvas id="temperature-chart"></canvas>
+            </div>
+          </div>
+          
+          <div class="card">
+            <h3><i class="fas fa-tint"></i> Humidity & Wind</h3>
+            <div class="chart-container">
+              <canvas id="humidity-wind-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3><i class="fas fa-calendar-day"></i> 7-Day Weather Forecast for <span id="city-name"></span></h3>
+          <table id="predictions-table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Min Temp</th><th>Max Temp</th><th>Avg Temp</th><th>Humidity</th><th>Wind</th><th>Condition</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3><i class="fas fa-chart-area"></i> Forecast Trends</h3>
+          <img id="forecast-chart" src="" alt="Weather Forecast Chart">
+        </div>
+      </div>
+
+      <!-- Historical Data Section with Download Buttons -->
+      <div class="results" id="historical-results">
+        <div class="card">
+          <h3><i class="fas fa-history"></i> Historical Weather Data for <span id="historical-city-name"></span></h3>
+          
+          <div class="interval-controls">
+            <label for="weather-interval">Show data for:</label>
+            <select id="weather-interval" class="interval-select">
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="21">Last 21 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="all">All available data</option>
+            </select>
+            
+            <!-- Download Buttons -->
+            <div class="download-buttons">
+              <button class="download-btn" id="download-weather-data" style="background: linear-gradient(135deg, #28a745, #20c997);">
+                <i class="fas fa-download"></i> Download Weather Data (CSV)
+              </button>
+            </div>
+          </div>
+          
+          <div class="chart-container" id="weather-chart-container">
+            <canvas id="historical-chart"></canvas>
+          </div>
+        </div>
+        
+        <div class="card">
+          <h3><i class="fas fa-chart-line"></i> Model Performance History</h3>
+          
+          <div class="interval-controls">
+            <label for="performance-interval">Show data for:</label>
+            <select id="performance-interval" class="interval-select">
+              <option value="10">Last 10 records</option>
+              <option value="20">Last 20 records</option>
+              <option value="30" selected>Last 30 records</option>
+              <option value="all">All available records</option>
+            </select>
+            
+            <!-- Performance Data Download Button -->
+            <div class="download-buttons">
+              <button class="download-btn" id="download-performance-data" style="background: linear-gradient(135deg, #6f42c1, #e83e8c);">
+                <i class="fas fa-chart-line"></i> Download Performance Data (CSV)
+              </button>
+            </div>
+          </div>
+          
+          <div class="chart-container" id="performance-chart-container">
+            <canvas id="performance-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Performance Tab -->
+    <div class="tab-content" id="performance-content">
+      <div class="results" id="performance-results">
+        <div class="card">
+          <h3><i class="fas fa-brain"></i> Model Performance</h3>
+          
+          <div class="metric-explanation">
+            <p><strong>About these metrics:</strong> These metrics show how well our machine learning models perform 
+            on historical weather data. Higher scores indicate better pattern recognition, which helps improve future predictions.</p>
+            <ul>
+              <li><strong>R² Score:</strong> How well the model explains temperature variations (closer to 1.0 is better)</li>
+              <li><strong>MAE:</strong> Average prediction error in degrees (lower is better)</li>
+              <li><strong>RMSE:</strong> Emphasizes larger prediction errors (lower is better)</li>
+            </ul>
+          </div>
+          
+          <p>Best Algorithm: <span id="best-model"></span></p>
+          <p>Overall R² Score: <span id="r2-score"></span></p>
+          <table id="metrics-table">
+            <thead>
+              <tr><th>Parameter</th><th>R²</th><th>MAE</th><th>RMSE</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Enhanced Weather Advice Tab -->
+    <div class="tab-content" id="advice-content">
+      <div class="results" id="advice-results">
+        <div class="card">
+          <h3><i class="fas fa-lightbulb"></i> Weather-Based Recommendations for <span id="advice-city-name">--</span></h3>
+          <p style="margin-bottom: 25px; color: #666; line-height: 1.6;">Based on your 7-day weather forecast, here are personalized recommendations to help you plan ahead and stay comfortable.</p>
+          
+          <div class="advice-categories" id="advice-categories">
+            <!-- Advice categories will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2025 SkySense Weather Intelligence | Powered by Machine Learning</p>
+    </div>
+  </div>
+
+  <script>
+    // Enhanced Weather advice generation function
+    function generateWeatherAdvice(predictions) {
+      if (!predictions || predictions.length === 0) return {};
+
+      const advice = {
+        clothing: { icon: 'fas fa-tshirt', title: 'Clothing & Comfort', items: [] },
+        outdoor: { icon: 'fas fa-hiking', title: 'Outdoor Activities', items: [] },
+        health: { icon: 'fas fa-heart', title: 'Health & Wellness', items: [] },
+        transport: { icon: 'fas fa-car', title: 'Transportation', items: [] },
+        home: { icon: 'fas fa-home', title: 'Home & Garden', items: [] }
+      };
+
+      // Calculate averages and extremes
+      const avgTemp = predictions.reduce((sum, day) => sum + parseFloat(day.avg_temp), 0) / predictions.length;
+      const maxTemp = Math.max(...predictions.map(day => parseFloat(day.max_temp)));
+      const minTemp = Math.min(...predictions.map(day => parseFloat(day.min_temp)));
+      const avgHumidity = predictions.reduce((sum, day) => sum + parseFloat(day.humidity), 0) / predictions.length;
+      const avgWind = predictions.reduce((sum, day) => sum + parseFloat(day.wind), 0) / predictions.length;
+      
+      // Count rainy/stormy days
+      const rainyDays = predictions.filter(day => 
+        day.condition.toLowerCase().includes('rain') || 
+        day.condition.toLowerCase().includes('storm') || 
+        day.condition.toLowerCase().includes('shower')
+      ).length;
+      
+      const sunnyDays = predictions.filter(day => 
+        day.condition.toLowerCase().includes('sunny') || 
+        day.condition.toLowerCase().includes('clear')
+      ).length;
+
+      // Temperature-based clothing advice
+      if (avgTemp < 5) {
+        advice.clothing.items.push({
+          text: "Wear heavy winter clothing including insulated jacket, warm boots, gloves, and hat",
+          details: "Consider thermal underlayers and a windproof outer layer to protect against wind chill.",
+          type: "warning", icon: "fas fa-snowflake"
+        });
+        advice.health.items.push({
+          text: "Risk of hypothermia and frostbite - limit outdoor exposure and stay warm",
+          details: "Check on elderly neighbors and keep emergency supplies in your car.",
+          type: "warning", icon: "fas fa-exclamation-triangle"
+        });
+      } else if (avgTemp < 15) {
+        advice.clothing.items.push({
+          text: "Layer up with sweaters, jackets, and warm accessories",
+          details: "Opt for breathable layers that can be easily removed as temperatures fluctuate.",
+          type: "info", icon: "fas fa-layer-group"
+        });
+        advice.outdoor.items.push({
+          text: "Perfect weather for hiking and outdoor sports with proper gear",
+          details: "Trails will be less crowded and wildlife more active during these conditions.",
+          type: "success", icon: "fas fa-hiking"
+        });
+      } else if (avgTemp < 25) {
+        advice.clothing.items.push({
+          text: "Comfortable weather - light layers and a light jacket for evenings",
+          details: "Natural fibers like cotton and linen work well in these temperatures.",
+          type: "success", icon: "fas fa-tshirt"
+        });
+        advice.outdoor.items.push({
+          text: "Ideal conditions for most outdoor activities and sightseeing",
+          details: "Great for picnics, cycling, and outdoor dining with minimal preparation needed.",
+          type: "success", icon: "fas fa-sun"
+        });
+      } else if (avgTemp < 35) {
+        advice.clothing.items.push({
+          text: "Light, breathable clothing recommended - cotton and linen work best",
+          details: "Light colors reflect heat better than dark colors in warm weather.",
+          type: "info", icon: "fas fa-tshirt"
+        });
+        advice.health.items.push({
+          text: "Stay hydrated and use sunscreen when outdoors",
+          details: "Aim to drink at least 2-3 liters of water daily and reapply sunscreen every 2 hours.",
+          type: "info", icon: "fas fa-sun"
+        });
+      } else {
+        advice.clothing.items.push({
+          text: "Minimal, very light clothing - stay in shade when possible",
+          details: "Loose-fitting, light-colored clothing made of natural fibers will help keep you cool.",
+          type: "warning", icon: "fas fa-thermometer-full"
+        });
+        advice.health.items.push({
+          text: "Extreme heat warning - risk of heat exhaustion, stay indoors during peak hours",
+          details: "Avoid strenuous activity between 10 AM - 4 PM and watch for signs of heat illness.",
+          type: "warning", icon: "fas fa-exclamation-triangle"
+        });
+        advice.outdoor.items.push({
+          text: "Avoid strenuous outdoor activities during 10 AM - 4 PM",
+          details: "If you must be outside, take frequent breaks in shaded or air-conditioned areas.",
+          type: "warning", icon: "fas fa-ban"
+        });
+      }
+
+      // Humidity-based advice
+      if (avgHumidity > 80) {
+        advice.health.items.push({
+          text: "High humidity may cause discomfort - use dehumidifiers indoors",
+          details: "High humidity can exacerbate respiratory issues and make temperatures feel warmer.",
+          type: "info", icon: "fas fa-tint"
+        });
+        advice.clothing.items.push({
+          text: "Choose moisture-wicking fabrics to stay comfortable",
+          details: "Synthetic fabrics like polyester and nylon dry faster than cotton in humid conditions.",
+          type: "info", icon: "fas fa-wind"
+        });
+      } else if (avgHumidity < 30) {
+        advice.health.items.push({
+          text: "Low humidity - use moisturizer and stay hydrated to prevent dry skin",
+          details: "Consider using a humidifier at night to prevent dry nasal passages and skin irritation.",
+          type: "info", icon: "fas fa-tint-slash"
+        });
+      }
+
+      // Wind-based advice
+      if (avgWind > 30) {
+        advice.transport.items.push({
+          text: "Strong winds expected - drive carefully, especially on highways",
+          details: "Be extra cautious when driving high-profile vehicles and watch for debris on roads.",
+          type: "warning", icon: "fas fa-wind"
+        });
+        advice.outdoor.items.push({
+          text: "Avoid outdoor activities like cycling or water sports",
+          details: "Wind can create dangerous conditions for activities requiring balance or stability.",
+          type: "warning", icon: "fas fa-exclamation-triangle"
+        });
+      } else if (avgWind > 15) {
+        advice.outdoor.items.push({
+          text: "Moderate winds - great for sailing and kite flying",
+          details: "Perfect conditions for wind-dependent sports, but secure loose outdoor items.",
+          type: "success", icon: "fas fa-wind"
+        });
+        advice.clothing.items.push({
+          text: "Windbreaker recommended for outdoor activities",
+          details: "A lightweight windbreaker will block wind chill while remaining breathable.",
+          type: "info", icon: "fas fa-shield-alt"
+        });
+      }
+
+      // Rain-based advice
+      if (rainyDays >= 4) {
+        advice.transport.items.push({
+          text: "Multiple rainy days ahead - check traffic conditions before traveling",
+          details: "Allow extra travel time and increase following distance in wet conditions.",
+          type: "warning", icon: "fas fa-cloud-rain"
+        });
+        advice.clothing.items.push({
+          text: "Keep waterproof jacket and umbrella handy throughout the week",
+          details: "Waterproof footwear with good traction will help prevent slips on wet surfaces.",
+          type: "info", icon: "fas fa-umbrella"
+        });
+      } else if (rainyDays > 0) {
+        advice.transport.items.push({
+          text: "Some rain expected - carry umbrella and allow extra travel time",
+          details: "Roads are most slippery when rain first starts after a dry period.",
+          type: "info", icon: "fas fa-cloud-rain"
+        });
+      }
+
+      // Sunny weather advice
+      if (sunnyDays >= 5) {
+        advice.outdoor.items.push({
+          text: "Excellent week for outdoor events, picnics, and photography",
+          details: "Golden hour (first and last hour of sunlight) provides the best lighting for photos.",
+          type: "success", icon: "fas fa-sun"
+        });
+        advice.health.items.push({
+          text: "Great opportunity for vitamin D synthesis - spend time outdoors safely",
+          details: "15-30 minutes of sun exposure several times per week helps maintain vitamin D levels.",
+          type: "success", icon: "fas fa-sun"
+        });
+      }
+
+      // Temperature variation advice
+      if (maxTemp - minTemp > 15) {
+        advice.clothing.items.push({
+          text: "Large temperature swings - dress in removable layers",
+          details: "Start with a base layer, add insulating layers, and finish with a weatherproof outer layer.",
+          type: "info", icon: "fas fa-layer-group"
+        });
+        advice.health.items.push({
+          text: "Temperature variations may affect those with joint sensitivity",
+          details: "Consider gentle stretching in the morning to help joints adjust to temperature changes.",
+          type: "info", icon: "fas fa-thermometer-half"
+        });
+      }
+
+      // ENHANCED HOME & GARDEN ADVICE - CONTEXT SPECIFIC
+      if (avgTemp < 10) {
+        advice.home.items.push({
+          text: "Cold weather ahead - check home insulation and heating systems",
+          details: "Seal drafty windows and doors to improve energy efficiency during cold spells.",
+          type: "warning", icon: "fas fa-thermometer-empty"
+        });
+        advice.home.items.push({
+          text: "Protect outdoor pipes from freezing with insulation",
+          details: "Disconnect garden hoses and consider installing frost-proof spigots.",
+          type: "info", icon: "fas fa-tint"
+        });
+      } else if (avgTemp > 30) {
+        advice.home.items.push({
+          text: "Hot weather - use fans and close blinds during peak heat hours",
+          details: "Keep blinds closed on south and west-facing windows to reduce indoor temperatures.",
+          type: "warning", icon: "fas fa-thermometer-full"
+        });
+        advice.home.items.push({
+          text: "Consider using a programmable thermostat to save on cooling costs",
+          details: "Set temperature higher when away and use ceiling fans to feel 4°C cooler.",
+          type: "info", icon: "fas fa-temperature-high"
+        });
+      } else {
+        advice.home.items.push({
+          text: "Mild temperatures - perfect for natural ventilation",
+          details: "Open windows during cooler morning and evening hours to refresh indoor air.",
+          type: "success", icon: "fas fa-wind"
+        });
+      }
+
+      // Garden-specific advice based on conditions
+      if (rainyDays >= 3) {
+        advice.home.items.push({
+          text: "Rainy week ahead - perfect for natural watering, skip irrigation",
+          details: "Rainwater is better for plants as it contains no chlorine and is slightly acidic.",
+          type: "success", icon: "fas fa-cloud-rain"
+        });
+        advice.home.items.push({
+          text: "Check for proper drainage in garden beds and potted plants",
+          details: "Ensure pots have drainage holes to prevent root rot during extended wet periods.",
+          type: "info", icon: "fas fa-seedling"
+        });
+      } else if (sunnyDays >= 5 && avgTemp > 20) {
+        advice.home.items.push({
+          text: "Excellent conditions for gardening and outdoor projects",
+          details: "Perfect weather for planting, weeding, and outdoor maintenance tasks.",
+          type: "success", icon: "fas fa-leaf"
+        });
+        advice.home.items.push({
+          text: "Consider mulching garden beds to retain moisture",
+          details: "2-3 inches of mulch helps conserve water and suppress weeds in warm weather.",
+          type: "info", icon: "fas fa-tree"
+        });
+      }
+
+      // Humidity-specific home advice
+      if (avgHumidity > 70) {
+        advice.home.items.push({
+          text: "High humidity - use exhaust fans and consider a dehumidifier",
+          details: "Run bathroom fans during showers and kitchen exhaust while cooking to reduce moisture.",
+          type: "info", icon: "fas fa-tint"
+        });
+      } else if (avgHumidity < 35) {
+        advice.home.items.push({
+          text: "Low humidity - houseplants may need extra misting",
+          details: "Group plants together to create a more humid microclimate, or use a humidifier.",
+          type: "info", icon: "fas fa-spa"
+        });
+      }
+
+      // Wind-specific home advice
+      if (avgWind > 20) {
+        advice.home.items.push({
+          text: "Windy conditions - secure outdoor furniture and decorations",
+          details: "Bring in lightweight items or secure them to prevent damage or loss.",
+          type: "warning", icon: "fas fa-wind"
+        });
+      }
+
+      // Energy efficiency advice based on temperature
+      if (avgTemp < 15 || avgTemp > 25) {
+        advice.home.items.push({
+          text: "Adjust thermostat settings for energy efficiency",
+          details: `Set to ${avgTemp < 15 ? '18-20°C when home, 15°C when away' : '24-26°C when home, 28°C when away'} to save energy.`,
+          type: "info", icon: "fas fa-bolt"
+        });
+      }
+
+      return advice;
+    }
+
+    // Function to render advice
+    function renderAdvice(advice, cityName) {
+      document.getElementById('advice-city-name').textContent = cityName;
+      const container = document.getElementById('advice-categories');
+      container.innerHTML = '';
+
+      Object.values(advice).forEach(category => {
+        if (category.items.length === 0) return;
+
+        const categoryDiv = document.createElement('div');
+        categoryDiv.className = 'advice-category';
+        
+        categoryDiv.innerHTML = `
+          <h4><i class="${category.icon}"></i> ${category.title}</h4>
+          <ul class="advice-list">
+            ${category.items.map(item => `
+              <li class="${item.type}-advice">
+                <span class="advice-icon"><i class="${item.icon}"></i></span>
+                <div>
+                  <div>${item.text}</div>
+                  ${item.details ? `<div class="advice-details">${item.details}</div>` : ''}
+                </div>
+              </li>
+            `).join('')}
+          </ul>
+        `;
+        
+        container.appendChild(categoryDiv);
+      });
+      
+      // Make sure the advice tab content is visible
+      document.getElementById('advice-results').style.display = 'block';
+    }
+
+    // Initialize charts
+    let temperatureChart, humidityWindChart, historicalChart, performanceChart;
+    
+    function initializeCharts() {
+      const tempChartCtx = document.getElementById('temperature-chart').getContext('2d');
+      const humidityWindChartCtx = document.getElementById('humidity-wind-chart').getContext('2d');
+      
+      temperatureChart = new Chart(tempChartCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Max Temperature',
+              data: [],
+              borderColor: '#ff6384',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Avg Temperature',
+              data: [],
+              borderColor: 'rgba(54, 162, 235, 1)',
+              backgroundColor: 'rgba(54, 162, 235, 0.2)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Min Temperature',
+              data: [],
+              borderColor: 'rgba(75, 192, 192, 1)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              tension: 0.3,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Temperature Forecast (°C)'
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Temperature (°C)'
+              }
+            }
+          }
+        }
+      });
+      
+      humidityWindChart = new Chart(humidityWindChartCtx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Humidity (%)',
+              data: [],
+              backgroundColor: 'rgba(75, 192, 192, 0.7)',
+              yAxisID: 'y'
+            },
+            {
+              label: 'Wind Speed (km/h)',
+              data: [],
+              backgroundColor: 'rgba(153, 102, 255, 0.7)',
+              type: 'line',
+              tension: 0.3,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Humidity & Wind Forecast'
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              title: {
+                display: true,
+                text: 'Humidity (%)'
+              },
+              min: 0,
+              max: 100
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              title: {
+                display: true,
+                text: 'Wind Speed (km/h)'
+              },
+              grid: {
+                drawOnChartArea: false
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function initializeHistoricalChart() {
+      const historicalChartCtx = document.getElementById('historical-chart').getContext('2d');
+      historicalChart = new Chart(historicalChartCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Avg Temperature',
+              data: [],
+              borderColor: 'rgba(54, 162, 235, 1)',
+              backgroundColor: 'rgba(54, 162, 235, 0.2)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Humidity',
+              data: [],
+              borderColor: 'rgba(75, 192, 192, 1)',
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              tension: 0.3,
+              fill: true,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Historical Weather Trends'
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Temperature (°C)'
+              },
+              position: 'left'
+            },
+            y1: {
+              title: {
+                display: true,
+                text: 'Humidity (%)'
+              },
+              position: 'right',
+              grid: {
+                drawOnChartArea: false
+              },
+              min: 0,
+              max: 100
+            }
+          }
+        }
+      });
+    }
+
+    function initializePerformanceChart() {
+      const performanceChartCtx = document.getElementById('performance-chart').getContext('2d');
+      performanceChart = new Chart(performanceChartCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'R² Score',
+              data: [],
+              borderColor: 'rgba(255, 99, 132, 1)',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'MAE',
+              data: [],
+              borderColor: 'rgba(255, 205, 86, 1)',
+              backgroundColor: 'rgba(255, 205, 86, 0.2)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'RMSE',
+              data: [],
+              borderColor: 'rgba(153, 102, 255, 1)',
+              backgroundColor: 'rgba(153, 102, 255, 0.2)',
+              tension: 0.3,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Model Performance Over Time'
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Score'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Tab functionality
+    function setupTabs() {
+      const tabButtons = document.querySelectorAll('.tab-button');
+      const tabContents = document.querySelectorAll('.tab-content');
+
+      tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          // Remove active class from all buttons and contents
+          tabButtons.forEach(btn => btn.classList.remove('active'));
+          tabContents.forEach(content => content.classList.remove('active'));
+
+          // Add active class to clicked button and corresponding content
+          button.classList.add('active');
+          const tabId = button.getAttribute('data-tab');
+          
+          if (tabId === 'predictions') {
+            document.getElementById('predictions-content').classList.add('active');
+          } else if (tabId === 'performance') {
+            document.getElementById('performance-content').classList.add('active');
+          } else if (tabId === 'advice') {
+            document.getElementById('advice-content').classList.add('active');
+          }
+        });
+      });
+    }
+
+    // Global variables to store full datasets
+    let fullHistoricalData = [];
+    let fullPerformanceData = [];
+    let currentCity = '';
+
+    // Function to filter historical data by days
+    function filterHistoricalDataByDays(data, days) {
+      if (days === 'all') return data;
+      
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
+      
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= cutoffDate;
+      });
+    }
+
+    // Function to filter performance data by record count
+    function filterPerformanceDataByCount(data, count) {
+      if (count === 'all') return data;
+      
+      // Sort by timestamp (newest first) and take the specified count
+      const sortedData = [...data].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      return sortedData.slice(0, parseInt(count));
+    }
+
+    // Download functionality
+    function setupDownloadButtons() {
+        // Remove existing event listeners first to prevent duplicates
+        const weatherButton = document.getElementById('download-weather-data');
+        const performanceButton = document.getElementById('download-performance-data');
+        
+        // Clone and replace to remove old event listeners
+        const newWeatherButton = weatherButton.cloneNode(true);
+        const newPerformanceButton = performanceButton.cloneNode(true);
+        
+        weatherButton.parentNode.replaceChild(newWeatherButton, weatherButton);
+        performanceButton.parentNode.replaceChild(newPerformanceButton, performanceButton);
+        
+        // Add new event listeners
+        newWeatherButton.addEventListener('click', function() {
+            const interval = document.getElementById('weather-interval').value;
+            if (interval === 'all') {
+                downloadAllData('weather');
+            } else {
+                downloadData('weather', interval);
+            }
+        });
+        
+        newPerformanceButton.addEventListener('click', function() {
+            const interval = document.getElementById('performance-interval').value;
+            if (interval === 'all') {
+                downloadAllData('performance');
+            } else {
+                downloadData('performance', interval);
+            }
+        });
+    }
+
+    // Function to update historical chart
+    function updateHistoricalChart() {
+        const interval = document.getElementById('weather-interval').value;
+        const chartContainer = document.getElementById('weather-chart-container');
+        
+        if (interval === 'all') {
+            // Show download message instead of chart
+            chartContainer.innerHTML = `
+                <div class="download-message">
+                    <h4><i class="fas fa-download"></i> Download Full Dataset</h4>
+                    <p>To view all available historical weather data, please download the complete dataset using the button below.</p>
+                    <button class="download-btn" id="download-all-weather-data" style="background: linear-gradient(135deg, #28a745, #20c997);">
+                        <i class="fas fa-download"></i> Download All Weather Data (CSV)
+                    </button>
+                </div>
+            `;
+            
+            // Add event listener to the new download button
+            document.getElementById('download-all-weather-data').addEventListener('click', function() {
+                downloadAllData('weather');
+            });
+        } else {
+            // Show chart with filtered data
+            const filteredData = filterHistoricalDataByDays(fullHistoricalData, interval);
+            
+            const historicalDates = filteredData.map(d => formatDate(d.date));
+            const historicalTemps = filteredData.map(d => d.avg_temp);
+            const historicalHumidity = filteredData.map(d => d.humidity);
+            
+            // Reinitialize chart if needed
+            if (!chartContainer.querySelector('canvas')) {
+                chartContainer.innerHTML = '<canvas id="historical-chart"></canvas>';
+                initializeHistoricalChart();
+            }
+            
+            historicalChart.data.labels = historicalDates;
+            historicalChart.data.datasets[0].data = historicalTemps;
+            historicalChart.data.datasets[1].data = historicalHumidity;
+            historicalChart.update();
+            
+            // Re-setup download buttons when switching back from "all" to limited options
+            setupDownloadButtons();
+        }
+    }
+
+    // Function to update performance chart
+    function updatePerformanceChart() {
+        const interval = document.getElementById('performance-interval').value;
+        const chartContainer = document.getElementById('performance-chart-container');
+        
+        if (interval === 'all') {
+            // Show download message instead of chart
+            chartContainer.innerHTML = `
+                <div class="download-message">
+                    <h4><i class="fas fa-download"></i> Download Full Dataset</h4>
+                    <p>To view all available model performance records, please download the complete dataset using the button below.</p>
+                    <button class="download-btn" id="download-all-performance-data" style="background: linear-gradient(135deg, #6f42c1, #e83e8c);">
+                        <i class="fas fa-chart-line"></i> Download All Performance Data (CSV)
+                    </button>
+                </div>
+            `;
+            
+            // Add event listener to the new download button
+            document.getElementById('download-all-performance-data').addEventListener('click', function() {
+                downloadAllData('performance');
+            });
+        } else {
+            // Show chart with filtered data
+            const filteredData = filterPerformanceDataByCount(fullPerformanceData, interval);
+            
+            // Sort by timestamp for proper chronological display
+            filteredData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            const performanceDates = filteredData.map(p => 
+                new Date(p.timestamp).toLocaleDateString()
+            );
+            const r2Scores = filteredData.map(p => p.r2_score);
+            const maeScores = filteredData.map(p => p.mae);
+            const rmseScores = filteredData.map(p => p.rmse);
+            
+            // Reinitialize chart if needed
+            if (!chartContainer.querySelector('canvas')) {
+                chartContainer.innerHTML = '<canvas id="performance-chart"></canvas>';
+                initializePerformanceChart();
+            }
+            
+            performanceChart.data.labels = performanceDates;
+            performanceChart.data.datasets[0].data = r2Scores;
+            performanceChart.data.datasets[1].data = maeScores;
+            performanceChart.data.datasets[2].data = rmseScores;
+            performanceChart.update();
+            
+            // Re-setup download buttons when switching back from "all" to limited options
+            setupDownloadButtons();
+        }
+    }
+
+    // Function to setup interval control event listeners
+    function setupIntervalControls() {
+      const weatherInterval = document.getElementById('weather-interval');
+      const performanceInterval = document.getElementById('performance-interval');
+      
+      weatherInterval.addEventListener('change', updateHistoricalChart);
+      performanceInterval.addEventListener('change', updatePerformanceChart);
+    }
+
+    // Function to show error messages on the page
+    function showError(message) {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      
+      // Hide the error after 5 seconds
+      setTimeout(() => {
+        errorDiv.style.display = 'none';
+      }, 5000);
+    }
+
+    // Function to show success messages
+    function showDownloadSuccess(message) {
+      const successDiv = document.createElement('div');
+      successDiv.className = 'success-message';
+      successDiv.innerHTML = `
+        <i class="fas fa-check-circle"></i> ${message}
+      `;
+      
+      const container = document.querySelector('.interval-controls');
+      container.appendChild(successDiv);
+      
+      setTimeout(() => {
+        successDiv.remove();
+      }, 3000);
+    }
+
+    // Function to download all data from database
+    async function downloadAllData(type) {
+        const city = currentCity;
+        if (!city) {
+            showError('Please generate predictions for a city first');
+            return;
+        }
+        
+        try {
+            // Show loading state
+            let button;
+            if (type === 'weather') {
+                button = document.getElementById('download-all-weather-data') || document.getElementById('download-weather-data');
+            } else {
+                button = document.getElementById('download-all-performance-data') || document.getElementById('download-performance-data');
+            }
+            
+            if (!button) {
+                showError('Download button not found');
+                return;
+            }
+            
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading from Database...';
+            button.disabled = true;
+            
+            // Call the backend API to download all data from database
+            const endpoint = type === 'weather' 
+                ? `/download-all-weather-data/${city}`
+                : `/download-all-performance-data/${city}`;
+            
+            const response = await fetch(endpoint);
+            
+            if (!response.ok) {
+                // Check if it's a JSON error response
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Download failed');
+                } catch (e) {
+                    throw new Error('Download failed: ' + response.statusText);
+                }
+            }
+            
+            // Check if response is CSV (should be for downloads)
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/csv')) {
+                // Create download link for CSV
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${city}_${type}_all_data.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                // Show success message
+                showDownloadSuccess(`All ${type} data downloaded successfully from database!`);
+            } else {
+                // Handle JSON error response
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Invalid response format');
+            }
+            
+        } catch (error) {
+            showError('Download failed: ' + error.message);
+        } finally {
+            // Restore button state
+            let button;
+            if (type === 'weather') {
+                button = document.getElementById('download-all-weather-data') || document.getElementById('download-weather-data');
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-download"></i> Download Weather Data (CSV)';
+                    button.disabled = false;
+                }
+            } else {
+                button = document.getElementById('download-all-performance-data') || document.getElementById('download-performance-data');
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-chart-line"></i> Download Performance Data (CSV)';
+                    button.disabled = false;
+                }
+            }
+        }
+    }
+
+    // Function to download filtered data
+    async function downloadData(type, interval) {
+        const city = currentCity;
+        if (!city) {
+            showError('Please generate predictions for a city first');
+            return;
+        }
+        
+        try {
+            // Show loading state
+            let button;
+            if (type === 'weather') {
+                button = document.getElementById('download-weather-data');
+            } else {
+                button = document.getElementById('download-performance-data');
+            }
+            
+            if (!button) {
+                showError('Download button not found');
+                return;
+            }
+            
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Download...';
+            button.disabled = true;
+            
+            const endpoint = type === 'weather' 
+                ? `/download-historical-data/${city}?days=${interval}`
+                : `/download-performance-data/${city}?limit=${interval}`;
+            
+            const response = await fetch(endpoint);
+            
+            if (!response.ok) {
+                // Check if it's a JSON error response
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Download failed');
+                } catch (e) {
+                    throw new Error('Download failed: ' + response.statusText);
+                }
+            }
+            
+            // Check if response is CSV (should be for downloads)
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/csv')) {
+                // Create download link for CSV
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${city}_${type}_data_${interval}_${type === 'weather' ? 'days' : 'records'}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                // Show success message
+                showDownloadSuccess(`${type} data downloaded successfully!`);
+            } else {
+                // Handle JSON error response
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Invalid response format');
+            }
+            
+        } catch (error) {
+            showError('Download failed: ' + error.message);
+        } finally {
+            // Restore button state
+            let button;
+            if (type === 'weather') {
+                button = document.getElementById('download-weather-data');
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-download"></i> Download Weather Data (CSV)';
+                    button.disabled = false;
+                }
+            } else {
+                button = document.getElementById('download-performance-data');
+                if (button) {
+                    button.innerHTML = '<i class="fas fa-chart-line"></i> Download Performance Data (CSV)';
+                    button.disabled = false;
+                }
+            }
+        }
+    }
+
+    // City search functionality
+    (function setupCitySearch() {
+      const searchInput = document.getElementById("city-search");
+      const citySelect = document.getElementById("city");
+      let cityTimeout = null;
+
+      searchInput.addEventListener("input", function () {
+        clearTimeout(cityTimeout);
+        const q = this.value.trim();
+        if (q.length < 2) {
+          citySelect.innerHTML = '<option value="">-- Select a city --</option>';
+          return;
+        }
+
+        cityTimeout = setTimeout(() => {
+          fetch(`/cities?q=${encodeURIComponent(q)}`)
+            .then(res => res.json())
+            .then(list => {
+              citySelect.innerHTML = '<option value="">-- Select a city --</option>';
+              if (Array.isArray(list) && list.length > 0) {
+                list.forEach(c => {
+                  try {
+                    const opt = document.createElement('option');
+                    opt.value = c.value || c.name || '';
+                    opt.textContent = c.name || c.value || '';
+                    citySelect.appendChild(opt);
+                  } catch (e) {
+                    console.error('Error creating option', e);
+                  }
+                });
+              } else {
+                citySelect.innerHTML = '<option value="">No matches found</option>';
+              }
+            })
+            .catch(err => {
+              console.error("City fetch error:", err);
+              showError("Could not load city suggestions. Check backend /cities.");
+            });
+        }, 350);
+      });
+    })();
+
+    // Function to format date by removing time portion
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      
+      // Check if the date string contains GMT (indicating full date with time)
+      if (dateString.includes('GMT')) {
+        // Parse the full date string
+        const date = new Date(dateString);
+        
+        // Format as "Day, Month Day, Year" (e.g., "Friday, October 15, 2023")
+        const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options);
+      }
+      
+      // If it's already in the format "Fri, 19", just return it as is
+      if (dateString.includes(',') && !isNaN(dateString.split(',')[1])) {
+        return dateString;
+      }
+      
+      // Fallback: just return the original string
+      return dateString;
+    }
+
+    // Function to load historical data
+    async function loadHistoricalData(city) {
+      const loadingIndicator = document.getElementById('loading-indicator');
+      const historicalResults = document.getElementById('historical-results');
+      
+      loadingIndicator.style.display = "block";
+      historicalResults.style.display = "none";
+      
+      try {
+        // Load historical weather data
+        const historicalRes = await fetch(`/historical-data/${city}`);
+        const historicalData = await historicalRes.json();
+        
+        if (!historicalData.success) {
+          showError("Historical data error: " + historicalData.error);
+          loadingIndicator.style.display = "none";
+          return;
+        }
+        
+        // Load performance data
+        const performanceRes = await fetch(`/historical-performance/${city}?limit=1000`);
+        const performanceData = await performanceRes.json();
+        
+        // Store full datasets globally
+        fullHistoricalData = historicalData.data || [];
+        fullPerformanceData = performanceData.success ? (performanceData.performances || []) : [];
+        currentCity = city;
+        
+        // Update historical data display
+        document.getElementById('historical-city-name').textContent = city;
+        
+        // Initialize charts if not already initialized
+        if (!historicalChart) {
+          initializeHistoricalChart();
+        }
+        if (!performanceChart) {
+          initializePerformanceChart();
+        }
+        
+        // Update charts with initial intervals
+        updateHistoricalChart();
+        
+        // Update performance chart if data available
+        if (performanceData.success && fullPerformanceData.length > 0) {
+          updatePerformanceChart();
+        } else {
+          // Clear performance chart if no data
+          performanceChart.data.labels = [];
+          performanceChart.data.datasets.forEach(dataset => dataset.data = []);
+          performanceChart.update();
+        }
+        
+        historicalResults.style.display = "block";
+        loadingIndicator.style.display = "none";
+        
+      } catch (err) {
+        loadingIndicator.style.display = "none";
+        showError("Failed to load historical data: " + err.message);
+      }
+    }
+
+    document.getElementById("predictBtn").addEventListener("click", async () => {
+      const cityInput = document.getElementById("city");
+      const city = cityInput.value.trim();
+
+      if(!city){
+        showError("Please enter a city name before generating predictions.");
+        cityInput.focus();
+        return;
+      }
+
+      const loadingIndicator = document.getElementById("loading-indicator");
+      const results = document.getElementById("results");
+      const performanceResults = document.getElementById("performance-results");
+      const errorDiv = document.getElementById('error-message');
+      const tabNavigation = document.getElementById('tab-navigation');
+      
+      // Hide any previous error and results
+      errorDiv.style.display = 'none';
+      results.style.display = 'none';
+      performanceResults.style.display = 'none';
+      document.getElementById('historical-results').style.display = 'none';
+      document.getElementById('advice-results').style.display = 'none';
+      loadingIndicator.style.display = "block";
+
+      try {
+        const res = await fetch("/predict", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({city})
+        });
+        const data = await res.json();
+        
+        loadingIndicator.style.display = "none";
+
+        if(!data.success){
+          showError("Error: " + (data.error || "Unknown error occurred"));
+          return;
+        }
+
+        // Show tab navigation
+        tabNavigation.style.display = 'flex';
+
+        // Update dashboard cards
+        const avgTemp = data.predictions.reduce((sum, day) => sum + parseFloat(day.avg_temp), 0) / data.predictions.length;
+        const avgHumidity = data.predictions.reduce((sum, day) => sum + parseFloat(day.humidity), 0) / data.predictions.length;
+        const avgWind = data.predictions.reduce((sum, day) => sum + parseFloat(day.wind), 0) / data.predictions.length;
+        
+        document.getElementById('avg-temp-value').textContent = `${avgTemp.toFixed(1)}°C`;
+        document.getElementById('humidity-value').textContent = `${avgHumidity.toFixed(1)}%`;
+        document.getElementById('wind-value').textContent = `${avgWind.toFixed(1)} km/h`;
+        document.getElementById('accuracy-value').textContent = `${(parseFloat(data.r2_score) * 100).toFixed(1)}%`;
+
+        // Update model info in performance tab
+        document.getElementById("city-name").textContent = data.city;
+        document.getElementById("best-model").textContent = data.best_model;
+        document.getElementById("r2-score").textContent = data.r2_score;
+
+        // Metrics - Handle nested detailed_metrics structure
+        const metricsBody = document.querySelector("#metrics-table tbody");
+        metricsBody.innerHTML = "";
+
+        // Check if we have the nested detailed_metrics structure
+        let actualMetrics = null;
+        if (data.metrics && data.metrics.detailed_metrics) {
+            actualMetrics = data.metrics.detailed_metrics;
+        } else {
+            // Fallback to direct metrics (for backward compatibility)
+            actualMetrics = data.metrics;
+        }
+
+        if (!actualMetrics || typeof actualMetrics !== 'object' || Object.keys(actualMetrics).length === 0) {
+            metricsBody.innerHTML = "<tr><td colspan='4'>No metrics data available</td></tr>";
+        } else {
+            // Check if this is the expected structure with parameter keys (avg_c, min_c, etc.)
+            const expectedParams = ['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph'];
+            const hasExpectedParams = expectedParams.some(param => param in actualMetrics);
+            
+            if (hasExpectedParams) {
+                // This is the correct structure with individual parameters
+                for(const [param, m] of Object.entries(actualMetrics)){
+                    if (!m || typeof m !== 'object') {
+                        continue;
+                    }
+                    
+                    metricsBody.insertAdjacentHTML("beforeend", `<tr>
+                        <td>${param}</td>
+                        <td>${m.r2 !== undefined ? m.r2 : 'N/A'}</td>
+                        <td>${m.mae !== undefined ? m.mae : 'N/A'}</td>
+                        <td>${m.rmse !== undefined ? m.rmse : 'N/A'}</td>
+                    </tr>`);
+                }
+            } else {
+                // This might be the wrong structure - show what we have
+                for(const [key, value] of Object.entries(actualMetrics)){
+                    metricsBody.insertAdjacentHTML("beforeend", `<tr>
+                        <td>${key}</td>
+                        <td>${typeof value === 'object' ? (value.r2 !== undefined ? value.r2 : 'N/A') : 'N/A'}</td>
+                        <td>${typeof value === 'object' ? (value.mae !== undefined ? value.mae : 'N/A') : 'N/A'}</td>
+                        <td>${typeof value === 'object' ? (value.rmse !== undefined ? value.rmse : 'N/A') : 'N/A'}</td>
+                    </tr>`);
+                }
+            }
+        }
+
+        // Update data source indicator
+        if (data.source === 'database') {
+            document.getElementById('source-type').textContent = 'From database (cached)';
+            document.getElementById('source-type').style.color = '#4bc0c0';
+        } else {
+            document.getElementById('source-type').textContent = 'Newly generated';
+            document.getElementById('source-type').style.color = '#ff6384';
+        }
+
+        // Update charts
+        const dates = data.predictions.map(p => formatDate(p.date));
+        const maxTemps = data.predictions.map(p => parseFloat(p.max_temp));
+        const avgTemps = data.predictions.map(p => parseFloat(p.avg_temp));
+        const minTemps = data.predictions.map(p => parseFloat(p.min_temp));
+        const humidities = data.predictions.map(p => parseFloat(p.humidity));
+        const winds = data.predictions.map(p => parseFloat(p.wind));
+        
+        temperatureChart.data.labels = dates;
+        temperatureChart.data.datasets[0].data = maxTemps;
+        temperatureChart.data.datasets[1].data = avgTemps;
+        temperatureChart.data.datasets[2].data = minTemps;
+        temperatureChart.update();
+        
+        humidityWindChart.data.labels = dates;
+        humidityWindChart.data.datasets[0].data = humidities;
+        humidityWindChart.data.datasets[1].data = winds;
+        humidityWindChart.update();
+
+        // Predictions
+        const predBody = document.querySelector("#predictions-table tbody");
+        predBody.innerHTML = "";
+        for(const p of data.predictions){
+          predBody.insertAdjacentHTML("beforeend", `<tr>
+            <td>${formatDate(p.date)}</td>
+            <td>${p.min_temp}°C</td>
+            <td>${p.max_temp}°C</td>
+            <td>${p.avg_temp}°C</td>
+            <td>${p.humidity}%</td>
+            <td>${p.wind} km/h</td>
+            <td><span class="condition-badge">${p.condition}</span></td>
+          </tr>`);
+        }
+
+        // Chart
+        document.getElementById("forecast-chart").src = "data:image/png;base64," + data.chart;
+
+        // Generate and display weather advice
+        const weatherAdvice = generateWeatherAdvice(data.predictions);
+        renderAdvice(weatherAdvice, data.city);
+
+        results.style.display = "block";
+        performanceResults.style.display = "block";
+        document.getElementById('historical-results').style.display = "block";
+
+        // Also load historical data for this city
+        loadHistoricalData(city);
+
+      } catch(err){
+        loadingIndicator.style.display = "none";
+        showError("Request failed: " + err.message);
+      }
+    });
+
+    // Intro typewriter animation
+    (function(){
+      const text = "SkySense";
+      const target = document.getElementById('intro-text');
+      const intro = document.getElementById('intro');
+      let i = 0;
+
+      function typeNext() {
+        if (i < text.length) {
+          target.textContent += text.charAt(i);
+          i++;
+          setTimeout(typeNext, 140);
+        } else {
+          setTimeout(() => {
+            document.body.classList.add('site-visible');
+            intro.classList.add('fade-out');
+            setTimeout(() => {
+              if (intro && intro.parentNode) intro.parentNode.removeChild(intro);
+            }, 900);
+          }, 650);
+        }
+      }
+
+      window.addEventListener('load', () => {
+        if (target) target.textContent = "";
+        typeNext();
+      });
+    })();
+
+    // Initialize page when loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize charts
+      initializeCharts();
+      initializeHistoricalChart();
+      initializePerformanceChart();
+      
+      // Initialize interval controls
+      setupIntervalControls();
+      // Initialize tab functionality
+      setupTabs();
+      // Initialize download buttons
+      setupDownloadButtons();
+    });
+  </script>
+</body>
+</html>
