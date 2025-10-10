@@ -1,3 +1,4 @@
+from models import db, Prediction, ModelPerformance
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 import sqlite3
