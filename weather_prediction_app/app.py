@@ -80,6 +80,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib
 import threading
 from datetime import datetime
+API_KEY = "245159b18d634837900112029250310"
+BASE_URL = "https://api.weatherapi.com/v1"
 
 class WeatherPredictor:
     def __init__(self):
