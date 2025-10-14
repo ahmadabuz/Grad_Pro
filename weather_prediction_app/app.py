@@ -909,6 +909,19 @@ def get_latest_predictions_from_db(city, days=7):
 # Initialize predictor
 predictor = WeatherPredictor()
 
+
+with app.app_context():
+    try:
+        instance_path = os.path.join(os.path.dirname(__file__), 'instance')
+        if not os.path.exists(instance_path):
+            os.makedirs(instance_path)
+        db.create_all()
+        print("✓ Database tables created successfully")
+    except Exception as e:
+        print(f"Database initialization: {e}")
+
+
+
 @app.route('/cities', methods=['GET'])
 def get_cities():
     query = request.args.get('q', '')  # what the user typed
