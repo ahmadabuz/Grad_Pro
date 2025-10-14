@@ -899,25 +899,35 @@ def get_latest_predictions_from_db(city, days=7):
     """Retrieve the latest predictions from the database"""
     try:
         today = datetime.now().date()
-        today_start = datetime.combine(today, datetime.min.time())
         
-        # Get predictions for today and future dates that were generated TODAY
+        # Get predictions for today onwards that were marked as current
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= today,
-            Prediction.is_current == True,
-            Prediction.generation_timestamp >= today_start  # ADDED: Must be generated today
+            Prediction.is_current == True
         ).order_by(Prediction.prediction_date.asc()).limit(days).all()
 
         if not predictions or len(predictions) < days:
+            print(f"[DB] Not enough predictions in cache (found {len(predictions) if predictions else 0}, need {days})")
             return None
 
-        # Verify we have a complete 7-day forecast starting from today
+        # CRITICAL: Verify predictions START from today
+        first_pred_date = predictions[0].prediction_date
+        if first_pred_date != today:
+            print(f"[DB] Predictions start from {first_pred_date}, but today is {today}. Cache is stale!")
+            return None
+
+        # CRITICAL: Verify ALL predictions are in sequence (today, today+1, today+2, ...)
         prediction_dates = [pred.prediction_date for pred in predictions]
         expected_dates = [today + timedelta(days=i) for i in range(days)]
 
         if prediction_dates != expected_dates:
+            print(f"[DB] Prediction dates don't match expected sequence")
+            print(f"[DB] Expected: {expected_dates}")
+            print(f"[DB] Got: {prediction_dates}")
             return None
+
+        print(f"[DB] Valid cache found for {city}: {first_pred_date} to {prediction_dates[-1]}")
 
         # Convert to list of dictionaries
         result = []
@@ -934,9 +944,8 @@ def get_latest_predictions_from_db(city, days=7):
 
         return result
     except Exception as e:
-        print(f"Error retrieving from database: {e}")
+        print(f"[DB] Error retrieving from database: {e}")
         return None
-
 
 
 
@@ -1387,6 +1396,22 @@ def fix_metrics():
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
 
+
+
+@app.route('/test-predict/<city>')
+def test_predict(city):
+    """Debug endpoint to trace through prediction logic"""
+    print(f"\n=== STARTING PREDICTION FOR {city} ===")
+    print(f"Today's date: {datetime.now().date()}")
+    
+    result = get_latest_predictions_from_db(city, 7)
+    
+    if result:
+        print(f"Database returned predictions from {result[0]['date']} to {result[-1]['date']}")
+        return jsonify({"status": "using_cache", "predictions": result})
+    else:
+        print("No valid cache - would regenerate here")
+        return jsonify({"status": "would_regenerate", "message": "Cache failed validation"})
 
 @app.route('/debug-metrics/<city>')
 def debug_metrics(city):
