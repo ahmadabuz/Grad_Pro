@@ -472,6 +472,62 @@
     font-style: italic;
   }
 
+  /* Confidence Indicator Styles */
+  .confidence-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  .confidence-high {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+
+  .confidence-medium {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+  }
+
+  .confidence-low {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+
+  .confidence-explanation {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #667eea;
+  }
+
+  .confidence-explanation h5 {
+    margin: 0 0 5px 0;
+    color: #495057;
+    font-size: 0.85rem;
+  }
+
+  .confidence-explanation ul {
+    margin: 0;
+    padding-left: 16px;
+  }
+
+  .confidence-explanation li {
+    margin-bottom: 3px;
+  }
+
   /* Chart containers */
   .chart-container {
     position: relative;
@@ -587,7 +643,7 @@
     flex-wrap: wrap;
   }
 
-  /* Model Performance Explanation Styles */
+  /* Pattern Recognition Explanation Styles */
   .metric-explanation {
     background: #f8f9ff;
     border-left: 4px solid #667eea;
@@ -835,8 +891,8 @@
       <button class="tab-button active" data-tab="predictions">
         <i class="fas fa-chart-line"></i> Predictions
       </button>
-      <button class="tab-button" data-tab="performance">
-        <i class="fas fa-brain"></i> Model Performance
+      <button class="tab-button" data-tab="pattern-recognition">
+        <i class="fas fa-brain"></i> Pattern Recognition
       </button>
       <button class="tab-button" data-tab="advice">
         <i class="fas fa-lightbulb"></i> Weather Advice
@@ -870,10 +926,10 @@
           </div>
           
           <div class="dashboard-card">
-            <h4><i class="fas fa-chart-line"></i> Model Performance</h4>
+            <h4><i class="fas fa-brain"></i> Pattern Recognition</h4>
             <div class="weather-icon" id="accuracy-icon">📈</div>
             <div class="stat-value" id="accuracy-value">--%</div>
-            <div class="stat-label">R² Score</div>
+            <div class="stat-label">Learning Score</div>
           </div>
         </div>
 
@@ -941,7 +997,7 @@
         </div>
         
         <div class="card">
-          <h3><i class="fas fa-chart-line"></i> Model Performance History</h3>
+          <h3><i class="fas fa-chart-line"></i> Pattern Recognition History</h3>
           
           <div class="interval-controls">
             <label for="performance-interval">Show data for:</label>
@@ -955,7 +1011,7 @@
             <!-- Performance Data Download Button -->
             <div class="download-buttons">
               <button class="download-btn" id="download-performance-data" style="background: linear-gradient(135deg, #6f42c1, #e83e8c);">
-                <i class="fas fa-chart-line"></i> Download Performance Data (CSV)
+                <i class="fas fa-chart-line"></i> Download Pattern Data (CSV)
               </button>
             </div>
           </div>
@@ -967,27 +1023,27 @@
       </div>
     </div>
 
-    <!-- Model Performance Tab -->
-    <div class="tab-content" id="performance-content">
-      <div class="results" id="performance-results">
+    <!-- Pattern Recognition Tab -->
+    <div class="tab-content" id="pattern-recognition-content">
+      <div class="results" id="pattern-recognition-results">
         <div class="card">
-          <h3><i class="fas fa-brain"></i> Model Performance</h3>
+          <h3><i class="fas fa-brain"></i> Pattern Recognition</h3>
           
           <div class="metric-explanation">
-            <p><strong>About these metrics:</strong> These metrics show how well our machine learning models perform 
-            on historical weather data. Higher scores indicate better pattern recognition, which helps improve future predictions.</p>
+            <p><strong>About Pattern Recognition:</strong> These metrics show how well our AI understands historical weather patterns. Higher scores indicate better learning from past data, which helps improve future weather predictions.</p>
             <ul>
-              <li><strong>R² Score:</strong> How well the model explains temperature variations (closer to 1.0 is better)</li>
-              <li><strong>MAE:</strong> Average prediction error in degrees (lower is better)</li>
-              <li><strong>RMSE:</strong> Emphasizes larger prediction errors (lower is better)</li>
+              <li><strong>Learning Score (R²):</strong> How well the AI recognizes weather patterns (closer to 1.0 means better pattern understanding)</li>
+              <li><strong>Average Error (MAE):</strong> How close predictions are to historical patterns (lower is better)</li>
+              <li><strong>Error Range (RMSE):</strong> How consistent predictions are (lower means more reliable pattern recognition)</li>
             </ul>
+            <p><em>Note: These scores measure how well our AI learned from historical weather data, not future prediction accuracy.</em></p>
           </div>
           
           <p>Best Algorithm: <span id="best-model"></span></p>
-          <p>Overall R² Score: <span id="r2-score"></span></p>
+          <p>Overall Learning Score: <span id="r2-score"></span></p>
           <table id="metrics-table">
             <thead>
-              <tr><th>Parameter</th><th>R²</th><th>MAE</th><th>RMSE</th></tr>
+              <tr><th>Weather Parameter</th><th>Learning Score</th><th>Average Error</th><th>Error Range</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -1002,6 +1058,17 @@
           <h3><i class="fas fa-lightbulb"></i> Weather-Based Recommendations for <span id="advice-city-name">--</span></h3>
           <p style="margin-bottom: 25px; color: #666; line-height: 1.6;">Based on your 7-day weather forecast, here are personalized recommendations to help you plan ahead and stay comfortable.</p>
           
+          <!-- Confidence Explanation -->
+          <div class="confidence-explanation">
+            <h5><i class="fas fa-info-circle"></i> About Confidence Levels</h5>
+            <p>Our AI calculates confidence based on prediction consistency and historical pattern reliability:</p>
+            <ul>
+              <li><span class="confidence-indicator confidence-high">High Confidence</span> - Based on clear, consistent weather patterns</li>
+              <li><span class="confidence-indicator confidence-medium">Medium Confidence</span> - Some variability in predictions</li>
+              <li><span class="confidence-indicator confidence-low">Low Confidence</span> - Unusual patterns or higher prediction uncertainty</li>
+            </ul>
+          </div>
+          
           <div class="advice-categories" id="advice-categories">
             <!-- Advice categories will be populated by JavaScript -->
           </div>
@@ -1015,8 +1082,8 @@
   </div>
 
   <script>
-    // Enhanced Weather advice generation function
-    function generateWeatherAdvice(predictions) {
+    // Enhanced Weather advice generation function with confidence indicators
+    function generateWeatherAdvice(predictions, modelMetrics = {}) {
       if (!predictions || predictions.length === 0) return {};
 
       const advice = {
@@ -1034,6 +1101,11 @@
       const avgHumidity = predictions.reduce((sum, day) => sum + parseFloat(day.humidity), 0) / predictions.length;
       const avgWind = predictions.reduce((sum, day) => sum + parseFloat(day.wind), 0) / predictions.length;
       
+      // Calculate prediction consistency for confidence scoring
+      const tempConsistency = calculateTemperatureConsistency(predictions);
+      const patternStrength = calculatePatternStrength(predictions);
+      const overallConfidence = calculateOverallConfidence(tempConsistency, patternStrength, modelMetrics);
+
       // Count rainy/stormy days
       const rainyDays = predictions.filter(day => 
         day.condition.toLowerCase().includes('rain') || 
@@ -1046,255 +1118,418 @@
         day.condition.toLowerCase().includes('clear')
       ).length;
 
+      // Helper function to determine confidence level
+      function getConfidenceLevel(baseConfidence, factor = 1) {
+        const adjustedConfidence = baseConfidence * factor;
+        if (adjustedConfidence >= 0.7) return { level: 'high', text: 'High Confidence' };
+        if (adjustedConfidence >= 0.4) return { level: 'medium', text: 'Medium Confidence' };
+        return { level: 'low', text: 'Low Confidence' };
+      }
+
       // Temperature-based clothing advice
       if (avgTemp < 5) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.9); // High confidence for extreme cold
         advice.clothing.items.push({
           text: "Wear heavy winter clothing including insulated jacket, warm boots, gloves, and hat",
           details: "Consider thermal underlayers and a windproof outer layer to protect against wind chill.",
-          type: "warning", icon: "fas fa-snowflake"
+          type: "warning", 
+          icon: "fas fa-snowflake",
+          confidence: confidence
         });
         advice.health.items.push({
           text: "Risk of hypothermia and frostbite - limit outdoor exposure and stay warm",
           details: "Check on elderly neighbors and keep emergency supplies in your car.",
-          type: "warning", icon: "fas fa-exclamation-triangle"
+          type: "warning", 
+          icon: "fas fa-exclamation-triangle",
+          confidence: getConfidenceLevel(overallConfidence, 0.8)
         });
       } else if (avgTemp < 15) {
+        const confidence = getConfidenceLevel(overallConfidence);
         advice.clothing.items.push({
           text: "Layer up with sweaters, jackets, and warm accessories",
           details: "Opt for breathable layers that can be easily removed as temperatures fluctuate.",
-          type: "info", icon: "fas fa-layer-group"
+          type: "info", 
+          icon: "fas fa-layer-group",
+          confidence: confidence
         });
         advice.outdoor.items.push({
           text: "Perfect weather for hiking and outdoor sports with proper gear",
           details: "Trails will be less crowded and wildlife more active during these conditions.",
-          type: "success", icon: "fas fa-hiking"
+          type: "success", 
+          icon: "fas fa-hiking",
+          confidence: confidence
         });
       } else if (avgTemp < 25) {
+        const confidence = getConfidenceLevel(overallConfidence, 1.1); // Higher confidence for mild weather
         advice.clothing.items.push({
           text: "Comfortable weather - light layers and a light jacket for evenings",
           details: "Natural fibers like cotton and linen work well in these temperatures.",
-          type: "success", icon: "fas fa-tshirt"
+          type: "success", 
+          icon: "fas fa-tshirt",
+          confidence: confidence
         });
         advice.outdoor.items.push({
           text: "Ideal conditions for most outdoor activities and sightseeing",
           details: "Great for picnics, cycling, and outdoor dining with minimal preparation needed.",
-          type: "success", icon: "fas fa-sun"
+          type: "success", 
+          icon: "fas fa-sun",
+          confidence: confidence
         });
       } else if (avgTemp < 35) {
+        const confidence = getConfidenceLevel(overallConfidence);
         advice.clothing.items.push({
           text: "Light, breathable clothing recommended - cotton and linen work best",
           details: "Light colors reflect heat better than dark colors in warm weather.",
-          type: "info", icon: "fas fa-tshirt"
+          type: "info", 
+          icon: "fas fa-tshirt",
+          confidence: confidence
         });
         advice.health.items.push({
           text: "Stay hydrated and use sunscreen when outdoors",
           details: "Aim to drink at least 2-3 liters of water daily and reapply sunscreen every 2 hours.",
-          type: "info", icon: "fas fa-sun"
+          type: "info", 
+          icon: "fas fa-sun",
+          confidence: getConfidenceLevel(overallConfidence, 0.9)
         });
       } else {
+        const confidence = getConfidenceLevel(overallConfidence, 0.9); // High confidence for extreme heat
         advice.clothing.items.push({
           text: "Minimal, very light clothing - stay in shade when possible",
           details: "Loose-fitting, light-colored clothing made of natural fibers will help keep you cool.",
-          type: "warning", icon: "fas fa-thermometer-full"
+          type: "warning", 
+          icon: "fas fa-thermometer-full",
+          confidence: confidence
         });
         advice.health.items.push({
           text: "Extreme heat warning - risk of heat exhaustion, stay indoors during peak hours",
           details: "Avoid strenuous activity between 10 AM - 4 PM and watch for signs of heat illness.",
-          type: "warning", icon: "fas fa-exclamation-triangle"
+          type: "warning", 
+          icon: "fas fa-exclamation-triangle",
+          confidence: confidence
         });
         advice.outdoor.items.push({
           text: "Avoid strenuous outdoor activities during 10 AM - 4 PM",
           details: "If you must be outside, take frequent breaks in shaded or air-conditioned areas.",
-          type: "warning", icon: "fas fa-ban"
+          type: "warning", 
+          icon: "fas fa-ban",
+          confidence: confidence
         });
       }
 
       // Humidity-based advice
       if (avgHumidity > 80) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.8);
         advice.health.items.push({
           text: "High humidity may cause discomfort - use dehumidifiers indoors",
           details: "High humidity can exacerbate respiratory issues and make temperatures feel warmer.",
-          type: "info", icon: "fas fa-tint"
+          type: "info", 
+          icon: "fas fa-tint",
+          confidence: confidence
         });
         advice.clothing.items.push({
           text: "Choose moisture-wicking fabrics to stay comfortable",
           details: "Synthetic fabrics like polyester and nylon dry faster than cotton in humid conditions.",
-          type: "info", icon: "fas fa-wind"
+          type: "info", 
+          icon: "fas fa-wind",
+          confidence: confidence
         });
       } else if (avgHumidity < 30) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.7);
         advice.health.items.push({
           text: "Low humidity - use moisturizer and stay hydrated to prevent dry skin",
           details: "Consider using a humidifier at night to prevent dry nasal passages and skin irritation.",
-          type: "info", icon: "fas fa-tint-slash"
+          type: "info", 
+          icon: "fas fa-tint-slash",
+          confidence: confidence
         });
       }
 
       // Wind-based advice
       if (avgWind > 30) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.8);
         advice.transport.items.push({
           text: "Strong winds expected - drive carefully, especially on highways",
           details: "Be extra cautious when driving high-profile vehicles and watch for debris on roads.",
-          type: "warning", icon: "fas fa-wind"
+          type: "warning", 
+          icon: "fas fa-wind",
+          confidence: confidence
         });
         advice.outdoor.items.push({
           text: "Avoid outdoor activities like cycling or water sports",
           details: "Wind can create dangerous conditions for activities requiring balance or stability.",
-          type: "warning", icon: "fas fa-exclamation-triangle"
+          type: "warning", 
+          icon: "fas fa-exclamation-triangle",
+          confidence: confidence
         });
       } else if (avgWind > 15) {
+        const confidence = getConfidenceLevel(overallConfidence);
         advice.outdoor.items.push({
           text: "Moderate winds - great for sailing and kite flying",
           details: "Perfect conditions for wind-dependent sports, but secure loose outdoor items.",
-          type: "success", icon: "fas fa-wind"
+          type: "success", 
+          icon: "fas fa-wind",
+          confidence: confidence
         });
         advice.clothing.items.push({
           text: "Windbreaker recommended for outdoor activities",
           details: "A lightweight windbreaker will block wind chill while remaining breathable.",
-          type: "info", icon: "fas fa-shield-alt"
+          type: "info", 
+          icon: "fas fa-shield-alt",
+          confidence: confidence
         });
       }
 
       // Rain-based advice
       if (rainyDays >= 4) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.9);
         advice.transport.items.push({
           text: "Multiple rainy days ahead - check traffic conditions before traveling",
           details: "Allow extra travel time and increase following distance in wet conditions.",
-          type: "warning", icon: "fas fa-cloud-rain"
+          type: "warning", 
+          icon: "fas fa-cloud-rain",
+          confidence: confidence
         });
         advice.clothing.items.push({
           text: "Keep waterproof jacket and umbrella handy throughout the week",
           details: "Waterproof footwear with good traction will help prevent slips on wet surfaces.",
-          type: "info", icon: "fas fa-umbrella"
+          type: "info", 
+          icon: "fas fa-umbrella",
+          confidence: confidence
         });
       } else if (rainyDays > 0) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.7);
         advice.transport.items.push({
           text: "Some rain expected - carry umbrella and allow extra travel time",
           details: "Roads are most slippery when rain first starts after a dry period.",
-          type: "info", icon: "fas fa-cloud-rain"
+          type: "info", 
+          icon: "fas fa-cloud-rain",
+          confidence: confidence
         });
       }
 
       // Sunny weather advice
       if (sunnyDays >= 5) {
+        const confidence = getConfidenceLevel(overallConfidence, 1.1);
         advice.outdoor.items.push({
           text: "Excellent week for outdoor events, picnics, and photography",
           details: "Golden hour (first and last hour of sunlight) provides the best lighting for photos.",
-          type: "success", icon: "fas fa-sun"
+          type: "success", 
+          icon: "fas fa-sun",
+          confidence: confidence
         });
         advice.health.items.push({
           text: "Great opportunity for vitamin D synthesis - spend time outdoors safely",
           details: "15-30 minutes of sun exposure several times per week helps maintain vitamin D levels.",
-          type: "success", icon: "fas fa-sun"
+          type: "success", 
+          icon: "fas fa-sun",
+          confidence: confidence
         });
       }
 
       // Temperature variation advice
       if (maxTemp - minTemp > 15) {
+        const confidence = getConfidenceLevel(overallConfidence);
         advice.clothing.items.push({
           text: "Large temperature swings - dress in removable layers",
           details: "Start with a base layer, add insulating layers, and finish with a weatherproof outer layer.",
-          type: "info", icon: "fas fa-layer-group"
+          type: "info", 
+          icon: "fas fa-layer-group",
+          confidence: confidence
         });
         advice.health.items.push({
           text: "Temperature variations may affect those with joint sensitivity",
           details: "Consider gentle stretching in the morning to help joints adjust to temperature changes.",
-          type: "info", icon: "fas fa-thermometer-half"
+          type: "info", 
+          icon: "fas fa-thermometer-half",
+          confidence: confidence
         });
       }
 
       // ENHANCED HOME & GARDEN ADVICE - CONTEXT SPECIFIC
       if (avgTemp < 10) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.9);
         advice.home.items.push({
           text: "Cold weather ahead - check home insulation and heating systems",
           details: "Seal drafty windows and doors to improve energy efficiency during cold spells.",
-          type: "warning", icon: "fas fa-thermometer-empty"
+          type: "warning", 
+          icon: "fas fa-thermometer-empty",
+          confidence: confidence
         });
         advice.home.items.push({
           text: "Protect outdoor pipes from freezing with insulation",
           details: "Disconnect garden hoses and consider installing frost-proof spigots.",
-          type: "info", icon: "fas fa-tint"
+          type: "info", 
+          icon: "fas fa-tint",
+          confidence: confidence
         });
       } else if (avgTemp > 30) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.9);
         advice.home.items.push({
           text: "Hot weather - use fans and close blinds during peak heat hours",
           details: "Keep blinds closed on south and west-facing windows to reduce indoor temperatures.",
-          type: "warning", icon: "fas fa-thermometer-full"
+          type: "warning", 
+          icon: "fas fa-thermometer-full",
+          confidence: confidence
         });
         advice.home.items.push({
           text: "Consider using a programmable thermostat to save on cooling costs",
           details: "Set temperature higher when away and use ceiling fans to feel 4°C cooler.",
-          type: "info", icon: "fas fa-temperature-high"
+          type: "info", 
+          icon: "fas fa-temperature-high",
+          confidence: confidence
         });
       } else {
+        const confidence = getConfidenceLevel(overallConfidence, 1.1);
         advice.home.items.push({
           text: "Mild temperatures - perfect for natural ventilation",
           details: "Open windows during cooler morning and evening hours to refresh indoor air.",
-          type: "success", icon: "fas fa-wind"
+          type: "success", 
+          icon: "fas fa-wind",
+          confidence: confidence
         });
       }
 
       // Garden-specific advice based on conditions
       if (rainyDays >= 3) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.9);
         advice.home.items.push({
           text: "Rainy week ahead - perfect for natural watering, skip irrigation",
           details: "Rainwater is better for plants as it contains no chlorine and is slightly acidic.",
-          type: "success", icon: "fas fa-cloud-rain"
+          type: "success", 
+          icon: "fas fa-cloud-rain",
+          confidence: confidence
         });
         advice.home.items.push({
           text: "Check for proper drainage in garden beds and potted plants",
           details: "Ensure pots have drainage holes to prevent root rot during extended wet periods.",
-          type: "info", icon: "fas fa-seedling"
+          type: "info", 
+          icon: "fas fa-seedling",
+          confidence: confidence
         });
       } else if (sunnyDays >= 5 && avgTemp > 20) {
+        const confidence = getConfidenceLevel(overallConfidence, 1.1);
         advice.home.items.push({
           text: "Excellent conditions for gardening and outdoor projects",
           details: "Perfect weather for planting, weeding, and outdoor maintenance tasks.",
-          type: "success", icon: "fas fa-leaf"
+          type: "success", 
+          icon: "fas fa-leaf",
+          confidence: confidence
         });
         advice.home.items.push({
           text: "Consider mulching garden beds to retain moisture",
           details: "2-3 inches of mulch helps conserve water and suppress weeds in warm weather.",
-          type: "info", icon: "fas fa-tree"
+          type: "info", 
+          icon: "fas fa-tree",
+          confidence: confidence
         });
       }
 
       // Humidity-specific home advice
       if (avgHumidity > 70) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.8);
         advice.home.items.push({
           text: "High humidity - use exhaust fans and consider a dehumidifier",
           details: "Run bathroom fans during showers and kitchen exhaust while cooking to reduce moisture.",
-          type: "info", icon: "fas fa-tint"
+          type: "info", 
+          icon: "fas fa-tint",
+          confidence: confidence
         });
       } else if (avgHumidity < 35) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.7);
         advice.home.items.push({
           text: "Low humidity - houseplants may need extra misting",
           details: "Group plants together to create a more humid microclimate, or use a humidifier.",
-          type: "info", icon: "fas fa-spa"
+          type: "info", 
+          icon: "fas fa-spa",
+          confidence: confidence
         });
       }
 
       // Wind-specific home advice
       if (avgWind > 20) {
+        const confidence = getConfidenceLevel(overallConfidence, 0.8);
         advice.home.items.push({
           text: "Windy conditions - secure outdoor furniture and decorations",
           details: "Bring in lightweight items or secure them to prevent damage or loss.",
-          type: "warning", icon: "fas fa-wind"
+          type: "warning", 
+          icon: "fas fa-wind",
+          confidence: confidence
         });
       }
 
       // Energy efficiency advice based on temperature
       if (avgTemp < 15 || avgTemp > 25) {
+        const confidence = getConfidenceLevel(overallConfidence);
         advice.home.items.push({
           text: "Adjust thermostat settings for energy efficiency",
           details: `Set to ${avgTemp < 15 ? '18-20°C when home, 15°C when away' : '24-26°C when home, 28°C when away'} to save energy.`,
-          type: "info", icon: "fas fa-bolt"
+          type: "info", 
+          icon: "fas fa-bolt",
+          confidence: confidence
         });
       }
 
       return advice;
     }
 
-    // Function to render advice
+    // Helper function to calculate temperature consistency
+    function calculateTemperatureConsistency(predictions) {
+      if (!predictions || predictions.length < 2) return 0.5;
+      
+      const temps = predictions.map(p => parseFloat(p.avg_temp));
+      const mean = temps.reduce((sum, temp) => sum + temp, 0) / temps.length;
+      const variance = temps.reduce((sum, temp) => sum + Math.pow(temp - mean, 2), 0) / temps.length;
+      const stdDev = Math.sqrt(variance);
+      
+      // Lower standard deviation = higher consistency
+      // Normalize to 0-1 range (assuming std dev up to 10°C is reasonable)
+      const maxExpectedStdDev = 10;
+      const consistency = Math.max(0, 1 - (stdDev / maxExpectedStdDev));
+      
+      return consistency;
+    }
+
+    // Helper function to calculate pattern strength
+    function calculatePatternStrength(predictions) {
+      if (!predictions || predictions.length < 3) return 0.5;
+      
+      // Check for clear trends (increasing, decreasing, or stable)
+      const temps = predictions.map(p => parseFloat(p.avg_temp));
+      let trendStrength = 0;
+      
+      // Simple trend detection
+      const firstThird = temps.slice(0, Math.floor(temps.length / 3));
+      const lastThird = temps.slice(-Math.floor(temps.length / 3));
+      const startAvg = firstThird.reduce((a, b) => a + b) / firstThird.length;
+      const endAvg = lastThird.reduce((a, b) => a + b) / lastThird.length;
+      
+      const trend = Math.abs(endAvg - startAvg);
+      // Normalize trend strength (assuming 5°C change over week is significant)
+      trendStrength = Math.min(1, trend / 5);
+      
+      return trendStrength;
+    }
+
+    // Helper function to calculate overall confidence
+    function calculateOverallConfidence(tempConsistency, patternStrength, modelMetrics) {
+      let baseConfidence = 0.7; // Start with moderate confidence
+      
+      // Adjust based on temperature consistency
+      baseConfidence = baseConfidence * 0.6 + tempConsistency * 0.4;
+      
+      // Adjust based on pattern strength (clear patterns are easier to predict)
+      baseConfidence = baseConfidence * 0.7 + patternStrength * 0.3;
+      
+      // Adjust based on model performance if available
+      if (modelMetrics && modelMetrics.avg_c && modelMetrics.avg_c.r2) {
+        const modelR2 = parseFloat(modelMetrics.avg_c.r2);
+        baseConfidence = baseConfidence * 0.5 + modelR2 * 0.5;
+      }
+      
+      return Math.min(1, Math.max(0.3, baseConfidence)); // Keep within reasonable bounds
+    }
+
+    // Function to render advice with confidence indicators
     function renderAdvice(advice, cityName) {
       document.getElementById('advice-city-name').textContent = cityName;
       const container = document.getElementById('advice-categories');
@@ -1313,7 +1548,10 @@
               <li class="${item.type}-advice">
                 <span class="advice-icon"><i class="${item.icon}"></i></span>
                 <div>
-                  <div>${item.text}</div>
+                  <div>
+                    ${item.text}
+                    ${item.confidence ? `<span class="confidence-indicator confidence-${item.confidence.level}">${item.confidence.text}</span>` : ''}
+                  </div>
                   ${item.details ? `<div class="advice-details">${item.details}</div>` : ''}
                 </div>
               </li>
@@ -1535,7 +1773,7 @@
           labels: [],
           datasets: [
             {
-              label: 'R² Score',
+              label: 'Learning Score',
               data: [],
               borderColor: 'rgba(255, 99, 132, 1)',
               backgroundColor: 'rgba(255, 99, 132, 0.2)',
@@ -1543,7 +1781,7 @@
               fill: true
             },
             {
-              label: 'MAE',
+              label: 'Average Error',
               data: [],
               borderColor: 'rgba(255, 205, 86, 1)',
               backgroundColor: 'rgba(255, 205, 86, 0.2)',
@@ -1551,7 +1789,7 @@
               fill: true
             },
             {
-              label: 'RMSE',
+              label: 'Error Range',
               data: [],
               borderColor: 'rgba(153, 102, 255, 1)',
               backgroundColor: 'rgba(153, 102, 255, 0.2)',
@@ -1566,7 +1804,7 @@
           plugins: {
             title: {
               display: true,
-              text: 'Model Performance Over Time'
+              text: 'Pattern Recognition Over Time'
             }
           },
           scales: {
@@ -1604,8 +1842,8 @@
           
           if (tabId === 'predictions') {
             document.getElementById('predictions-content').classList.add('active');
-          } else if (tabId === 'performance') {
-            document.getElementById('performance-content').classList.add('active');
+          } else if (tabId === 'pattern-recognition') {
+            document.getElementById('pattern-recognition-content').classList.add('active');
           } else if (tabId === 'advice') {
             document.getElementById('advice-content').classList.add('active');
           }
@@ -1728,9 +1966,9 @@
             chartContainer.innerHTML = `
                 <div class="download-message">
                     <h4><i class="fas fa-download"></i> Download Full Dataset</h4>
-                    <p>To view all available model performance records, please download the complete dataset using the button below.</p>
+                    <p>To view all available pattern recognition records, please download the complete dataset using the button below.</p>
                     <button class="download-btn" id="download-all-performance-data" style="background: linear-gradient(135deg, #6f42c1, #e83e8c);">
-                        <i class="fas fa-chart-line"></i> Download All Performance Data (CSV)
+                        <i class="fas fa-chart-line"></i> Download All Pattern Data (CSV)
                     </button>
                 </div>
             `;
@@ -1887,7 +2125,7 @@
             } else {
                 button = document.getElementById('download-all-performance-data') || document.getElementById('download-performance-data');
                 if (button) {
-                    button.innerHTML = '<i class="fas fa-chart-line"></i> Download Performance Data (CSV)';
+                    button.innerHTML = '<i class="fas fa-chart-line"></i> Download Pattern Data (CSV)';
                     button.disabled = false;
                 }
             }
@@ -1973,7 +2211,7 @@
             } else {
                 button = document.getElementById('download-performance-data');
                 if (button) {
-                    button.innerHTML = '<i class="fas fa-chart-line"></i> Download Performance Data (CSV)';
+                    button.innerHTML = '<i class="fas fa-chart-line"></i> Download Pattern Data (CSV)';
                     button.disabled = false;
                 }
             }
@@ -2118,14 +2356,14 @@
 
       const loadingIndicator = document.getElementById("loading-indicator");
       const results = document.getElementById("results");
-      const performanceResults = document.getElementById("performance-results");
+      const patternRecognitionResults = document.getElementById("pattern-recognition-results");
       const errorDiv = document.getElementById('error-message');
       const tabNavigation = document.getElementById('tab-navigation');
       
       // Hide any previous error and results
       errorDiv.style.display = 'none';
       results.style.display = 'none';
-      performanceResults.style.display = 'none';
+      patternRecognitionResults.style.display = 'none';
       document.getElementById('historical-results').style.display = 'none';
       document.getElementById('advice-results').style.display = 'none';
       loadingIndicator.style.display = "block";
@@ -2158,7 +2396,7 @@
         document.getElementById('wind-value').textContent = `${avgWind.toFixed(1)} km/h`;
         document.getElementById('accuracy-value').textContent = `${(parseFloat(data.r2_score) * 100).toFixed(1)}%`;
 
-        // Update model info in performance tab
+        // Update model info in pattern recognition tab
         document.getElementById("city-name").textContent = data.city;
         document.getElementById("best-model").textContent = data.best_model;
         document.getElementById("r2-score").textContent = data.r2_score;
@@ -2177,7 +2415,7 @@
         }
 
         if (!actualMetrics || typeof actualMetrics !== 'object' || Object.keys(actualMetrics).length === 0) {
-            metricsBody.innerHTML = "<tr><td colspan='4'>No metrics data available</td></tr>";
+            metricsBody.innerHTML = "<tr><td colspan='4'>No pattern recognition data available</td></tr>";
         } else {
             // Check if this is the expected structure with parameter keys (avg_c, min_c, etc.)
             const expectedParams = ['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph'];
@@ -2190,8 +2428,16 @@
                         continue;
                     }
                     
+                    // Convert parameter names to user-friendly names
+                    let paramName = param;
+                    if (param === 'avg_c') paramName = 'Average Temperature';
+                    else if (param === 'min_c') paramName = 'Minimum Temperature';
+                    else if (param === 'max_c') paramName = 'Maximum Temperature';
+                    else if (param === 'humidity') paramName = 'Humidity';
+                    else if (param === 'wind_kph') paramName = 'Wind Speed';
+                    
                     metricsBody.insertAdjacentHTML("beforeend", `<tr>
-                        <td>${param}</td>
+                        <td>${paramName}</td>
                         <td>${m.r2 !== undefined ? m.r2 : 'N/A'}</td>
                         <td>${m.mae !== undefined ? m.mae : 'N/A'}</td>
                         <td>${m.rmse !== undefined ? m.rmse : 'N/A'}</td>
@@ -2256,12 +2502,12 @@
         // Chart
         document.getElementById("forecast-chart").src = "data:image/png;base64," + data.chart;
 
-        // Generate and display weather advice
-        const weatherAdvice = generateWeatherAdvice(data.predictions);
+        // Generate and display weather advice with confidence indicators
+        const weatherAdvice = generateWeatherAdvice(data.predictions, data.metrics);
         renderAdvice(weatherAdvice, data.city);
 
         results.style.display = "block";
-        performanceResults.style.display = "block";
+        patternRecognitionResults.style.display = "block";
         document.getElementById('historical-results').style.display = "block";
 
         // Also load historical data for this city
