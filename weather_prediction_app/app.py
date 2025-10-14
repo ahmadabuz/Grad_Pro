@@ -6,15 +6,13 @@ import os
 app = Flask(__name__)
 
 # Configuration
-if 'RENDER' in os.environ:
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////tmp/weather_predictions.db"
-    #app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
-
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/weather_predictions.db"
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
-
+# Call this function RIGHT AFTER db initialization
+init_db()  # ← ADD THIS LINE
 # Define models AFTER db initialization
 class Prediction(db.Model):
     __tablename__ = "predictions"
