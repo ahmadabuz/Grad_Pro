@@ -286,7 +286,7 @@ class WeatherPredictor:
 
         return results
 
-    def create_future_features(self, start_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
+def create_future_features(self, start_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
     """Create feature matrix for future predictions starting from a specific date"""
     future_features_list = []
     
