@@ -81,7 +81,41 @@ import threading
 from datetime import datetime
 API_KEY = "245159b18d634837900112029250310"
 BASE_URL = "https://api.weatherapi.com/v1"
+# Keep-alive system
+class KeepAliveManager:
+    def __init__(self):
+        self.enabled = 'RENDER' in os.environ
+        self.app_url = "https://skysense-20a1.onrender.com"  # Your exact app URL
+        
+    def ping_self(self):
+        """Ping the health endpoint"""
+        try:
+            response = requests.get(f"{self.app_url}/health", timeout=10)
+            print(f"KeepAlive: Ping successful - {response.status_code} at {time.strftime('%H:%M:%S')}")
+            return True
+        except Exception as e:
+            print(f"KeepAlive: Ping failed - {e}")
+            return False
+    
+    def start_keep_alive(self):
+        """Start the keep-alive system"""
+        if not self.enabled:
+            print("KeepAlive: Running locally, no need for keep-alive")
+            return
+            
+        print(f"KeepAlive: Starting for {self.app_url}")
+        ping_thread = threading.Thread(target=self._keep_alive_loop, daemon=True)
+        ping_thread.start()
+    
+    def _keep_alive_loop(self):
+        """Background loop to keep the app alive"""
+        while True:
+            self.ping_self()
+            # Wait 10 minutes (Render sleeps after 15 minutes of inactivity)
+            time.sleep(600)  # 10 minutes
 
+# Create keep-alive manager instance
+keep_alive_manager = KeepAliveManager()
 class WeatherPredictor:
     def __init__(self):
         self.model = None  # Placeholder for ML model (e.g., LSTM, XGBoost, etc.)
@@ -914,6 +948,11 @@ def get_latest_predictions_from_db(city, days=7):
 # Initialize predictor
 predictor = WeatherPredictor()
 
+@app.route('/health')
+def health_check():
+    """Minimal health check for uptime monitoring"""
+    return 'OK', 200
+
 @app.route('/cities', methods=['GET'])
 def get_cities():
     query = request.args.get('q', '')  # what the user typed
@@ -1729,7 +1768,8 @@ def download_all_performance_data(city):
 
 
 
-
+# Start keep-alive system when app loads
+keep_alive_manager.start_keep_alive()
 
 if __name__ == '__main__':
     with app.app_context():
