@@ -990,10 +990,26 @@ def predict():
         data = request.get_json()
         city = data.get('city', 'Amman')
         days = 7
+        today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())
 
-        # Check database first
+        # Check database first - but ONLY if predictions were generated TODAY
         db_predictions = get_latest_predictions_from_db(city, days)
+        
+        # Check if we have valid cached predictions from today
+        has_valid_cache = False
         if db_predictions:
+            # Verify the first prediction is for today
+            first_pred_date = db_predictions[0]['date']
+            if isinstance(first_pred_date, str):
+                first_pred_date = datetime.strptime(first_pred_date, '%Y-%m-%d').date()
+            
+            # Only use cache if predictions start from today
+            if first_pred_date == today:
+                has_valid_cache = True
+        
+        if has_valid_cache:
+            print(f"Using cached predictions for {city} from today")
             # Initialize default values
             metrics = {}
             model_name = "Unknown"
@@ -1005,12 +1021,10 @@ def predict():
             ).order_by(ModelPerformance.timestamp.desc()).first()
 
             if latest_performance:
-                # Handle both old and new metric formats
                 metrics = latest_performance.detailed_metrics or {}
                 model_name = latest_performance.model_name or "Unknown"
                 r2_score = latest_performance.r2_score or 0
 
-                # If R² is 0 but we have detailed metrics, calculate it
                 if r2_score == 0 and metrics:
                     r2_scores = []
                     for param_metrics in metrics.values():
@@ -1019,7 +1033,6 @@ def predict():
                     if r2_scores:
                         r2_score = sum(r2_scores) / len(r2_scores)
 
-            # Generate chart for the cached predictions
             chart_url = predictor.generate_chart(db_predictions)
 
             return jsonify({
@@ -1030,11 +1043,11 @@ def predict():
                 'predictions': db_predictions,
                 'chart': chart_url,
                 'metrics': metrics,
-                'source': 'database'
+                'source': 'database_cache'
             })
 
-        # If not in database, do the full training and prediction
-        print(f"Training new model for {city}...")
+        # If no valid cache, generate new predictions
+        print(f"No valid cache found or cache is from previous day. Training new model for {city}...")
         training_result = predictor.train_model(city)
         if 'error' in training_result:
             return jsonify({
@@ -1051,7 +1064,6 @@ def predict():
 
         chart_url = predictor.generate_chart(prediction_result['predictions'])
 
-        # Safely get model metrics
         model_metrics = {}
         overall_r2 = 0
 
@@ -1061,7 +1073,6 @@ def predict():
             best_model_result = predictor.results[predictor.best_model_name]
             model_metrics = best_model_result.get('detailed_metrics', {})
 
-            # Calculate overall R² score
             if model_metrics:
                 r2_scores = []
                 for param_metrics in model_metrics.values():
@@ -1070,7 +1081,6 @@ def predict():
                 if r2_scores:
                     overall_r2 = sum(r2_scores) / len(r2_scores)
 
-        # Build metrics dictionary with proper structure
         metrics_dict = {}
         if model_metrics:
             for param, metrics_data in model_metrics.items():
@@ -1085,7 +1095,6 @@ def predict():
                     metrics_dict[param] = {'r2': 0, 'mae': 0, 'rmse': 0}
         else:
             print("Warning: No detailed metrics available")
-            # Create default metrics structure
             metrics_dict = {
                 'avg_c': {'r2': 0, 'mae': 0, 'rmse': 0},
                 'min_c': {'r2': 0, 'mae': 0, 'rmse': 0},
@@ -1094,7 +1103,6 @@ def predict():
                 'wind_kph': {'r2': 0, 'mae': 0, 'rmse': 0}
             }
 
-        # Save to database
         save_success = save_predictions_to_db(
             city,
             prediction_result['predictions'],
@@ -1105,7 +1113,6 @@ def predict():
         if not save_success:
             print("Warning: Failed to save predictions to database")
 
-        # Build the final response object
         final_response = {
             'success': True,
             'city': city,
@@ -1127,17 +1134,6 @@ def predict():
             'success': False,
             'error': f"An unexpected error occurred: {str(e)}"
         })
-
-
-@app.route('/cache/clear', methods=['POST'])
-def clear_cache():
-    """Endpoint to manually clear the cache"""
-    try:
-        predictor.cache.clear()
-        return jsonify({'success': True, 'message': 'Cache cleared successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
 
 @app.route('/cache/stats', methods=['GET'])
 def cache_stats():
