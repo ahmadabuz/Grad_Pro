@@ -12,7 +12,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 # Call this function RIGHT AFTER db initialization
-init_db()  # ← ADD THIS LINE
 # Define models AFTER db initialization
 class Prediction(db.Model):
     __tablename__ = "predictions"
@@ -1660,6 +1659,24 @@ def download_all_weather_data(city):
             'error': str(e)
         })
 
+# Remove the direct init_db() call and use this:
+
+@app.before_first_request
+def initialize_database():
+    """Initialize database before first request"""
+    with app.app_context():
+        try:
+            # Ensure instance folder exists
+            instance_path = os.path.join(os.path.dirname(__file__), 'instance')
+            if not os.path.exists(instance_path):
+                os.makedirs(instance_path)
+            
+            # Create all tables
+            db.create_all()
+            print("✓ Database tables created successfully")
+            
+        except Exception as e:
+            print(f"✗ Database initialization failed: {e}")
 
 @app.route('/download-all-performance-data/<city>', methods=['GET'])
 def download_all_performance_data(city):
