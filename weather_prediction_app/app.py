@@ -898,53 +898,46 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
 
 
 def get_latest_predictions_from_db(city, days=7):
-    """Retrieve the latest predictions from the database - MUST start from TODAY"""
+    """Retrieve predictions only if they were generated TODAY"""
     try:
         today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())
         
-        # CRITICAL: Only get predictions that START from today
-        # This ensures we never return yesterday's forecast
+        # Get predictions for today onwards
         predictions = Prediction.query.filter(
             Prediction.city == city,
-            Prediction.prediction_date == today,  # MUST be exactly today
+            Prediction.prediction_date >= today,
             Prediction.is_current == True
-        ).order_by(Prediction.prediction_date.asc()).all()
+        ).order_by(Prediction.prediction_date.asc()).limit(days).all()
 
-        if not predictions:
-            print(f"[DB] No predictions found for {city} starting from {today}")
+        if not predictions or len(predictions) < days:
+            print(f"[DB] Not enough predictions: found {len(predictions) if predictions else 0}/{days}")
             return None
 
-        # Now get the full 7-day forecast starting from this first prediction
+        # CRITICAL CHECK: Were these predictions generated TODAY?
         first_pred = predictions[0]
-        first_date = first_pred.prediction_date
+        generation_date = first_pred.generation_timestamp.date()
         
-        # Get all predictions from first_date onwards for the next 7 days
-        all_predictions = Prediction.query.filter(
-            Prediction.city == city,
-            Prediction.prediction_date >= first_date,
-            Prediction.prediction_date < first_date + timedelta(days=days),
-            Prediction.is_current == True
-        ).order_by(Prediction.prediction_date.asc()).all()
-
-        if len(all_predictions) < days:
-            print(f"[DB] Incomplete forecast: found {len(all_predictions)} days, need {days}")
+        print(f"[DB] Found predictions generated on {generation_date}, today is {today}")
+        
+        if generation_date != today:
+            print(f"[DB] ✗ Predictions are stale! Generated {generation_date}, but today is {today}")
+            print(f"[DB] → Forcing regeneration")
             return None
 
-        # Verify the dates are exactly consecutive
-        prediction_dates = [pred.prediction_date for pred in all_predictions]
-        expected_dates = [first_date + timedelta(days=i) for i in range(days)]
-
-        if prediction_dates != expected_dates:
-            print(f"[DB] Dates not consecutive")
-            print(f"[DB] Expected: {expected_dates}")
-            print(f"[DB] Got: {prediction_dates}")
+        # Check that predictions cover the right date range
+        pred_dates = [p.prediction_date for p in predictions]
+        expected_dates = [today + timedelta(days=i) for i in range(days)]
+        
+        if pred_dates != expected_dates:
+            print(f"[DB] ✗ Date mismatch. Expected {expected_dates}, got {pred_dates}")
             return None
 
-        print(f"[DB] ✓ Valid cache found for {city}: {prediction_dates[0]} to {prediction_dates[-1]}")
+        print(f"[DB] ✓ Valid fresh cache: {pred_dates[0]} to {pred_dates[-1]} (generated today)")
 
-        # Convert to list of dictionaries
+        # Convert to result format
         result = []
-        for pred in all_predictions:
+        for pred in predictions:
             result.append({
                 'date': pred.prediction_date,
                 'min_temp': pred.min_temp,
@@ -956,12 +949,12 @@ def get_latest_predictions_from_db(city, days=7):
             })
 
         return result
+        
     except Exception as e:
-        print(f"[DB] Error retrieving from database: {e}")
+        print(f"[DB] Error: {e}")
         import traceback
         traceback.print_exc()
         return None
-
 
 
 
