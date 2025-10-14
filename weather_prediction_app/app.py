@@ -7,9 +7,7 @@ app = Flask(__name__)
 
 # Configuration
 if 'RENDER' in os.environ:
-    # On Render, use a persistent path
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/weather_predictions.db"
-else:
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////tmp/weather_predictions.db"
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
 
 app.config["SQLALCHEMY_ECHO"] = False
@@ -898,76 +896,27 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
 
 
 def get_latest_predictions_from_db(city, days=7):
-    """Retrieve the latest predictions from the database starting from TODAY"""
+    """Retrieve the latest predictions from the database"""
     try:
         today = datetime.now().date()
-        print(f"🔍 Database lookup for {city} on {today}, expecting dates: {[today + timedelta(days=i) for i in range(days)]}")
         
-        # Get predictions generated TODAY for dates starting from TODAY
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= today,
-            Prediction.generation_timestamp >= today,
             Prediction.is_current == True
         ).order_by(Prediction.prediction_date.asc()).limit(days).all()
-
-        print(f"📊 Found {len(predictions)} predictions in database")
         
         if not predictions or len(predictions) < days:
-            print("❌ Not enough predictions found or incomplete set")
             return None
-
-        # VERIFY THE DATE RANGE IS CORRECT FOR TODAY
+        
+        # Verify we have a complete 7-day forecast starting from today
         prediction_dates = [pred.prediction_date for pred in predictions]
         expected_dates = [today + timedelta(days=i) for i in range(days)]
         
-        print(f"📅 Expected dates: {expected_dates}")
-        print(f"📅 Found dates: {prediction_dates}")
-        
-        # THIS IS THE KEY CHECK: Make sure predictions are for the right dates
         if prediction_dates != expected_dates:
-            print(f"❌ Date mismatch: expected {expected_dates}, got {prediction_dates}")
             return None
 
-        # Convert to list of dictionaries
-        result = []
-        for pred in predictions:
-            result.append({
-                'date': pred.prediction_date,
-                'min_temp': float(pred.min_temp),
-                'max_temp': float(pred.max_temp),
-                'avg_temp': float(pred.avg_temp),
-                'humidity': float(pred.humidity),
-                'wind': float(pred.wind_speed),
-                'condition': str(pred.condition)
-            })
 
-        print(f"✅ Successfully retrieved correct predictions for {expected_dates[0]} to {expected_dates[-1]}")
-        return result
-    except Exception as e:
-        print(f"❌ Error retrieving from database: {e}")
-        return None
-
-def cleanup_old_predictions():
-    """Mark old predictions as not current when they're no longer relevant"""
-    try:
-        today = datetime.now().date()
-        print(f"🧹 Cleaning up predictions older than {today}")
-        
-        # Mark predictions that don't start from today as not current
-        outdated = Prediction.query.filter(
-            Prediction.prediction_date < today,
-            Prediction.is_current == True
-        ).update({'is_current': False}, synchronize_session=False)
-        
-        if outdated:
-            print(f"✅ Marked {outdated} outdated predictions as not current")
-        else:
-            print("✅ No outdated predictions found")
-            
-        db.session.commit()
-    except Exception as e:
-        print(f"❌ Error cleaning up old predictions: {e}")
 
 
 
@@ -1016,7 +965,6 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    cleanup_old_predictions()
     try:
         data = request.get_json()
         city = data.get('city', 'Amman')
