@@ -6,11 +6,15 @@ import os
 app = Flask(__name__)
 
 # Configuration
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/weather_predictions.db"
+if 'RENDER' in os.environ:
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////tmp/weather_predictions.db"
+
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
+
+# Define models AFTER db initialization
 class Prediction(db.Model):
     __tablename__ = "predictions"
     id = db.Column(db.Integer, primary_key=True)
@@ -908,19 +912,6 @@ def get_latest_predictions_from_db(city, days=7):
 
 # Initialize predictor
 predictor = WeatherPredictor()
-
-
-with app.app_context():
-    try:
-        instance_path = os.path.join(os.path.dirname(__file__), 'instance')
-        if not os.path.exists(instance_path):
-            os.makedirs(instance_path)
-        db.create_all()
-        print("✓ Database tables created successfully")
-    except Exception as e:
-        print(f"Database initialization: {e}")
-
-
 
 @app.route('/cities', methods=['GET'])
 def get_cities():
