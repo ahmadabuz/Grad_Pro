@@ -899,22 +899,43 @@ def get_latest_predictions_from_db(city, days=7):
     """Retrieve the latest predictions from the database"""
     try:
         today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())
         
+        # Get predictions for today and future dates that were generated TODAY
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= today,
-            Prediction.is_current == True
+            Prediction.is_current == True,
+            Prediction.generation_timestamp >= today_start  # ADDED: Must be generated today
         ).order_by(Prediction.prediction_date.asc()).limit(days).all()
-        
+
         if not predictions or len(predictions) < days:
             return None
-        
+
         # Verify we have a complete 7-day forecast starting from today
         prediction_dates = [pred.prediction_date for pred in predictions]
         expected_dates = [today + timedelta(days=i) for i in range(days)]
-        
+
         if prediction_dates != expected_dates:
             return None
+
+        # Convert to list of dictionaries
+        result = []
+        for pred in predictions:
+            result.append({
+                'date': pred.prediction_date,
+                'min_temp': pred.min_temp,
+                'max_temp': pred.max_temp,
+                'avg_temp': pred.avg_temp,
+                'humidity': pred.humidity,
+                'wind': pred.wind_speed,
+                'condition': pred.condition
+            })
+
+        return result
+    except Exception as e:
+        print(f"Error retrieving from database: {e}")
+        return None
 
 
 
