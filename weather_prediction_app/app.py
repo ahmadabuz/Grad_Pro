@@ -8,7 +8,7 @@ app = Flask(__name__)
 # Configuration
 if 'RENDER' in os.environ:
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////tmp/weather_predictions.db"
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
+    #app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///weather_predictions.db"
 
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
