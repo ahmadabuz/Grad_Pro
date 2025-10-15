@@ -1094,18 +1094,16 @@ cache_thread.start()
 
 @app.route('/history/<city>', methods=['GET'])
 def get_history(city):
-    """Get historical predictions for analysis - FIXED"""
+    """Get historical predictions for analysis"""
     try:
         # Get the last 30 days of predictions
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=30)
 
-        # FIXED: Only get CURRENT predictions for pattern recognition
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= start_date,
-            Prediction.prediction_date <= end_date,
-            Prediction.is_current == True  # Keep this for pattern recognition
+            Prediction.prediction_date <= end_date
         ).order_by(Prediction.prediction_date.asc()).all()
 
         if not predictions:
@@ -1126,18 +1124,15 @@ def get_history(city):
                 'avg_temp': pred.avg_temp,
                 'humidity': pred.humidity,
                 'wind_speed': pred.wind_speed,
-                'condition': pred.condition,
-                'is_current': pred.is_current
+                'condition': pred.condition
             })
 
-        print(f"📈 Pattern recognition: Found {len(result)} CURRENT records for {city}")
         return jsonify({
             'success': True,
             'city': city,
             'predictions': result
         })
     except Exception as e:
-        print(f"❌ Error in pattern recognition: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1352,19 +1347,19 @@ def debug_metrics(city):
 
 @app.route('/historical-data/<city>', methods=['GET'])
 def get_historical_data(city):
-    """Get historical weather data for analysis - FIXED"""
+    """Get historical weather data for analysis"""
     try:
         # Get date range from query parameters or use default
         days = request.args.get('days', 30, type=int)
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=days)
 
-        # FIXED: Get ALL historical predictions, not just current ones
+        # Get historical predictions
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= start_date,
-            Prediction.prediction_date <= end_date
-            # REMOVED: Prediction.is_current == True  # This was filtering out old data
+            Prediction.prediction_date <= end_date,
+            Prediction.is_current == True  # Only get the most recent predictions for each date
         ).order_by(Prediction.prediction_date.asc()).all()
 
         if not predictions:
@@ -1385,11 +1380,9 @@ def get_historical_data(city):
                 'wind_speed': pred.wind_speed,
                 'condition': pred.condition,
                 'model_version': pred.model_version,
-                'generated_at': pred.generation_timestamp.isoformat(),
-                'is_current': pred.is_current  # Add this to see which are current
+                'generated_at': pred.generation_timestamp.isoformat()
             })
 
-        print(f"📊 Historical data: Found {len(result)} records for {city} from {start_date} to {end_date}")
         return jsonify({
             'success': True,
             'city': city,
@@ -1400,7 +1393,6 @@ def get_historical_data(city):
             }
         })
     except Exception as e:
-        print(f"❌ Error in historical data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1634,7 +1626,30 @@ def download_all_weather_data(city):
             'error': str(e)
         })
 
-
+@app.route('/reset-database')
+def reset_database():
+    """Completely reset the database and start fresh from today"""
+    try:
+        with app.app_context():
+            # Drop all tables
+            db.drop_all()
+            
+            # Recreate all tables
+            db.create_all()
+            
+            print("✅ Database completely reset - all tables recreated")
+            
+        return jsonify({
+            'success': True,
+            'message': 'Database completely reset. All historical data cleared. Ready for new predictions starting from today.',
+            'reset_date': datetime.now().date().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 @app.route('/download-all-performance-data/<city>', methods=['GET'])
 def download_all_performance_data(city):
     """Download ALL model performance data as CSV from database"""
