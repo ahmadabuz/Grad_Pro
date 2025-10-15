@@ -789,32 +789,36 @@ def get_latest_predictions_from_db(city, days=7):
     """Retrieve the latest predictions from the database starting from TODAY"""
     try:
         today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())  # Start of today
         print(f"🔍 Database lookup for {city} on {today}")
         
-        # FIXED: Added generation_timestamp check to only get today's predictions
+        # FIXED: Proper datetime comparison
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= today,
-            Prediction.generation_timestamp >= today,  # THIS WAS MISSING!
+            Prediction.generation_timestamp >= today_start,  # FIXED: Use datetime, not date
             Prediction.is_current == True
         ).order_by(Prediction.prediction_date.asc()).limit(days).all()
 
         print(f"📊 Found {len(predictions)} predictions in database")
         
         if not predictions or len(predictions) < days:
-            print("❌ Not enough predictions found")
+            print("❌ Not enough predictions found or incomplete set")
             return None
 
+        # Verify we have a complete 7-day forecast starting from today
         prediction_dates = [pred.prediction_date for pred in predictions]
         expected_dates = [today + timedelta(days=i) for i in range(days)]
         
-        print(f"📅 Expected: {expected_dates}")
-        print(f"📅 Found: {prediction_dates}")
+        print(f"📅 Expected dates: {expected_dates}")
+        print(f"📅 Found dates: {prediction_dates}")
         
+        # Check if predictions are for consecutive days starting from today
         if prediction_dates != expected_dates:
-            print(f"❌ Date mismatch")
+            print(f"❌ Date mismatch: expected {expected_dates}, got {prediction_dates}")
             return None
 
+        # Convert to list of dictionaries
         result = []
         for pred in predictions:
             result.append({
@@ -827,7 +831,7 @@ def get_latest_predictions_from_db(city, days=7):
                 'condition': str(pred.condition)
             })
 
-        print(f"✅ Successfully retrieved predictions for {expected_dates[0]} to {expected_dates[-1]}")
+        print(f"✅ Successfully retrieved correct predictions for {expected_dates[0]} to {expected_dates[-1]}")
         return result
     except Exception as e:
         print(f"❌ Error retrieving from database: {e}")
