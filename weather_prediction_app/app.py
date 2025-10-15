@@ -940,21 +940,7 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    def cleanup_old_predictions():
-        try:
-            today_utc = datetime.utcnow().date()
-            print(f"🧹 Cleaning up predictions older than {today_utc} (UTC)")
-            outdated = Prediction.query.filter(
-                Prediction.prediction_date < today_utc,
-                Prediction.is_current == True
-            ).update({'is_current': False}, synchronize_session=False)
-            if outdated:
-                print(f"✅ Marked {outdated} outdated predictions as not current")
-            else:
-                print("✅ No outdated predictions found")
-            db.session.commit()
-        except Exception as e:
-            print(f"❌ Error cleaning up old predictions: {e}")
+
 # ... (keep all your other routes the same - they're fine)
 @app.route('/cache/clear', methods=['POST'])
 def clear_cache():
