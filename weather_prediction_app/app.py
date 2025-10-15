@@ -940,8 +940,149 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    try:
+        data = request.get_json()
+        city = data.get('city', 'Amman')
+        days = 7
 
-# ... (keep all your other routes the same - they're fine)
+        # Check database first
+        db_predictions = get_latest_predictions_from_db(city, days)
+        if db_predictions:
+            # Initialize default values
+            metrics = {}
+            model_name = "Unknown"
+            r2_score = 0
+
+            # Try to get performance metrics
+            latest_performance = ModelPerformance.query.filter_by(
+                city=city
+            ).order_by(ModelPerformance.timestamp.desc()).first()
+
+            if latest_performance:
+                # Handle both old and new metric formats
+                metrics = latest_performance.detailed_metrics or {}
+                model_name = latest_performance.model_name or "Unknown"
+                r2_score = latest_performance.r2_score or 0
+
+                # If R² is 0 but we have detailed metrics, calculate it
+                if r2_score == 0 and metrics:
+                    r2_scores = []
+                    for param_metrics in metrics.values():
+                        if isinstance(param_metrics, dict) and 'r2' in param_metrics:
+                            r2_scores.append(param_metrics['r2'])
+                    if r2_scores:
+                        r2_score = sum(r2_scores) / len(r2_scores)
+
+            # Generate chart for the cached predictions
+            chart_url = predictor.generate_chart(db_predictions)
+
+            return jsonify({
+                'success': True,
+                'city': city,
+                'best_model': model_name,
+                'r2_score': round(r2_score, 4),
+                'predictions': db_predictions,
+                'chart': chart_url,
+                'metrics': metrics,
+                'source': 'database'
+            })
+
+        # If not in database, do the full training and prediction
+        print(f"Training new model for {city}...")
+        training_result = predictor.train_model(city)
+        if 'error' in training_result:
+            return jsonify({
+                'success': False,
+                'error': training_result['error']
+            })
+
+        prediction_result = predictor.predict_weather(days=days)
+        if 'error' in prediction_result:
+            return jsonify({
+                'success': False,
+                'error': prediction_result['error']
+            })
+
+        chart_url = predictor.generate_chart(prediction_result['predictions'])
+
+        # Safely get model metrics
+        model_metrics = {}
+        overall_r2 = 0
+
+        if (hasattr(predictor, 'results') and predictor.best_model_name and
+                predictor.best_model_name in predictor.results):
+
+            best_model_result = predictor.results[predictor.best_model_name]
+            model_metrics = best_model_result.get('detailed_metrics', {})
+
+            # Calculate overall R² score
+            if model_metrics:
+                r2_scores = []
+                for param_metrics in model_metrics.values():
+                    if isinstance(param_metrics, dict) and 'r2' in param_metrics:
+                        r2_scores.append(param_metrics['r2'])
+                if r2_scores:
+                    overall_r2 = sum(r2_scores) / len(r2_scores)
+
+        # Build metrics dictionary with proper structure
+        metrics_dict = {}
+        if model_metrics:
+            for param, metrics_data in model_metrics.items():
+                try:
+                    metrics_dict[param] = {
+                        'r2': round(metrics_data.get('r2', 0), 4),
+                        'mae': round(metrics_data.get('mae', 0), 4),
+                        'rmse': round(metrics_data.get('rmse', 0), 4)
+                    }
+                except (TypeError, ValueError) as e:
+                    print(f"Error processing metrics for {param}: {e}")
+                    metrics_dict[param] = {'r2': 0, 'mae': 0, 'rmse': 0}
+        else:
+            print("Warning: No detailed metrics available")
+            # Create default metrics structure
+            metrics_dict = {
+                'avg_c': {'r2': 0, 'mae': 0, 'rmse': 0},
+                'min_c': {'r2': 0, 'mae': 0, 'rmse': 0},
+                'max_c': {'r2': 0, 'mae': 0, 'rmse': 0},
+                'humidity': {'r2': 0, 'mae': 0, 'rmse': 0},
+                'wind_kph': {'r2': 0, 'mae': 0, 'rmse': 0}
+            }
+
+        # Save to database
+        save_success = save_predictions_to_db(
+            city,
+            prediction_result['predictions'],
+            predictor.best_model_name,
+            metrics_dict
+        )
+
+        if not save_success:
+            print("Warning: Failed to save predictions to database")
+
+        # Build the final response object
+        final_response = {
+            'success': True,
+            'city': city,
+            'best_model': predictor.best_model_name,
+            'r2_score': round(overall_r2, 4),
+            'predictions': prediction_result['predictions'],
+            'chart': chart_url,
+            'metrics': metrics_dict,
+            'source': 'new_training'
+        }
+
+        return jsonify(final_response)
+
+    except Exception as e:
+        import traceback
+        print(f"Unexpected error: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f"An unexpected error occurred: {str(e)}"
+        })
+
+
 @app.route('/cache/clear', methods=['POST'])
 def clear_cache():
     try:
