@@ -940,9 +940,8 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-def cleanup_old_predictions():
-    """Mark old predictions as not current when they're no longer relevant"""
-    try:
+    def cleanup_old_predictions():
+        try:
         # Use UTC time to match server
         today_utc = datetime.utcnow().date()
         print(f"🧹 Cleaning up predictions older than {today_utc} (UTC)")
@@ -960,6 +959,8 @@ def cleanup_old_predictions():
         db.session.commit()
     except Exception as e:
         print(f"❌ Error cleaning up old predictions: {e}")
+        
+
 
 # ... (keep all your other routes the same - they're fine)
 @app.route('/cache/clear', methods=['POST'])
