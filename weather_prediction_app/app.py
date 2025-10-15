@@ -788,50 +788,44 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
 def get_latest_predictions_from_db(city, days=7):
     """Retrieve the latest predictions from the database starting from TODAY"""
     try:
-        today = datetime.now().date()
-        print(f"🔍 Database lookup for {city} on {today}")
+        # Get today's date in UTC to match server timezone
+        today_utc = datetime.utcnow().date()
+        print(f"🔍 Database lookup for {city} on {today_utc} (UTC)")
         
-        # Get the most recent generation timestamp for today's predictions
-        latest_generation = db.session.query(
-            db.func.max(Prediction.generation_timestamp)
-        ).filter(
-            Prediction.city == city,
-            Prediction.prediction_date >= today
-        ).scalar()
-        
-        if not latest_generation:
-            print("❌ No recent predictions found")
-            return None
-            
-        print(f"📅 Latest generation: {latest_generation}")
-        
-        # FIXED: Get predictions from the latest generation batch
+        # Get predictions generated TODAY (in UTC time)
         predictions = Prediction.query.filter(
             Prediction.city == city,
-            Prediction.prediction_date >= today,
-            Prediction.generation_timestamp == latest_generation,
+            Prediction.prediction_date >= today_utc,
             Prediction.is_current == True
         ).order_by(Prediction.prediction_date.asc()).limit(days).all()
 
         print(f"📊 Found {len(predictions)} predictions in database")
         
         if not predictions or len(predictions) < days:
-            print("❌ Not enough predictions found or incomplete set")
+            print("❌ Not enough predictions found")
+            return None
+
+        # Check if any of these predictions were generated today
+        predictions_generated_today = [
+            pred for pred in predictions 
+            if pred.generation_timestamp.date() == today_utc
+        ]
+        
+        if len(predictions_generated_today) < days:
+            print(f"❌ Only {len(predictions_generated_today)} predictions generated today, need {days}")
             return None
 
         # Verify we have a complete 7-day forecast starting from today
         prediction_dates = [pred.prediction_date for pred in predictions]
-        expected_dates = [today + timedelta(days=i) for i in range(days)]
+        expected_dates = [today_utc + timedelta(days=i) for i in range(days)]
         
-        print(f"📅 Expected dates: {[d.strftime('%Y-%m-%d') for d in expected_dates]}")
-        print(f"📅 Found dates: {[d.strftime('%Y-%m-%d') for d in prediction_dates]}")
+        print(f"📅 Expected: {expected_dates}")
+        print(f"📅 Found: {prediction_dates}")
         
-        # Check if predictions are for consecutive days starting from today
         if prediction_dates != expected_dates:
-            print(f"❌ Date mismatch: expected {expected_dates}, got {prediction_dates}")
+            print(f"❌ Date mismatch")
             return None
 
-        # Convert to list of dictionaries
         result = []
         for pred in predictions:
             result.append({
@@ -844,7 +838,7 @@ def get_latest_predictions_from_db(city, days=7):
                 'condition': str(pred.condition)
             })
 
-        print(f"✅ Successfully retrieved correct predictions for {expected_dates[0]} to {expected_dates[-1]}")
+        print(f"✅ Successfully retrieved predictions for {expected_dates[0]} to {expected_dates[-1]}")
         return result
     except Exception as e:
         print(f"❌ Error retrieving from database: {e}")
@@ -946,136 +940,26 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    cleanup_old_predictions()  # Clean up old predictions first
+def cleanup_old_predictions():
+    """Mark old predictions as not current when they're no longer relevant"""
     try:
-        data = request.get_json()
-        city = data.get('city', 'Amman')
-        days = 7
-
-        # Check database first
-        db_predictions = get_latest_predictions_from_db(city, days)
-        if db_predictions:
-            metrics = {}
-            model_name = "Unknown"
-            r2_score = 0
-
-            latest_performance = ModelPerformance.query.filter_by(
-                city=city
-            ).order_by(ModelPerformance.timestamp.desc()).first()
-
-            if latest_performance:
-                metrics = latest_performance.detailed_metrics or {}
-                model_name = latest_performance.model_name or "Unknown"
-                r2_score = latest_performance.r2_score or 0
-
-                if r2_score == 0 and metrics:
-                    r2_scores = []
-                    for param_metrics in metrics.values():
-                        if isinstance(param_metrics, dict) and 'r2' in param_metrics:
-                            r2_scores.append(param_metrics['r2'])
-                    if r2_scores:
-                        r2_score = sum(r2_scores) / len(r2_scores)
-
-            chart_url = predictor.generate_chart(db_predictions)
-
-            return jsonify({
-                'success': True,
-                'city': city,
-                'best_model': model_name,
-                'r2_score': round(r2_score, 4),
-                'predictions': db_predictions,
-                'chart': chart_url,
-                'metrics': metrics,
-                'source': 'database'
-            })
-
-        print(f"Training new model for {city}...")
-        training_result = predictor.train_model(city)
-        if 'error' in training_result:
-            return jsonify({
-                'success': False,
-                'error': training_result['error']
-            })
-
-        prediction_result = predictor.predict_weather(days=days)
-        if 'error' in prediction_result:
-            return jsonify({
-                'success': False,
-                'error': prediction_result['error']
-            })
-
-        chart_url = predictor.generate_chart(prediction_result['predictions'])
-
-        model_metrics = {}
-        overall_r2 = 0
-
-        if (hasattr(predictor, 'results') and predictor.best_model_name and
-                predictor.best_model_name in predictor.results):
-
-            best_model_result = predictor.results[predictor.best_model_name]
-            model_metrics = best_model_result.get('detailed_metrics', {})
-
-            if model_metrics:
-                r2_scores = []
-                for param_metrics in model_metrics.values():
-                    if isinstance(param_metrics, dict) and 'r2' in param_metrics:
-                        r2_scores.append(param_metrics['r2'])
-                if r2_scores:
-                    overall_r2 = sum(r2_scores) / len(r2_scores)
-
-        metrics_dict = {}
-        if model_metrics:
-            for param, metrics_data in model_metrics.items():
-                try:
-                    metrics_dict[param] = {
-                        'r2': round(metrics_data.get('r2', 0), 4),
-                        'mae': round(metrics_data.get('mae', 0), 4),
-                        'rmse': round(metrics_data.get('rmse', 0), 4)
-                    }
-                except (TypeError, ValueError) as e:
-                    print(f"Error processing metrics for {param}: {e}")
-                    metrics_dict[param] = {'r2': 0, 'mae': 0, 'rmse': 0}
+        # Use UTC time to match server
+        today_utc = datetime.utcnow().date()
+        print(f"🧹 Cleaning up predictions older than {today_utc} (UTC)")
+        
+        outdated = Prediction.query.filter(
+            Prediction.prediction_date < today_utc,
+            Prediction.is_current == True
+        ).update({'is_current': False}, synchronize_session=False)
+        
+        if outdated:
+            print(f"✅ Marked {outdated} outdated predictions as not current")
         else:
-            print("Warning: No detailed metrics available")
-            metrics_dict = {
-                'avg_c': {'r2': 0, 'mae': 0, 'rmse': 0},
-                'min_c': {'r2': 0, 'mae': 0, 'rmse': 0},
-                'max_c': {'r2': 0, 'mae': 0, 'rmse': 0},
-                'humidity': {'r2': 0, 'mae': 0, 'rmse': 0},
-                'wind_kph': {'r2': 0, 'mae': 0, 'rmse': 0}
-            }
-
-        save_success = save_predictions_to_db(
-            city,
-            prediction_result['predictions'],
-            predictor.best_model_name,
-            metrics_dict
-        )
-
-        if not save_success:
-            print("Warning: Failed to save predictions to database")
-
-        final_response = {
-            'success': True,
-            'city': city,
-            'best_model': predictor.best_model_name,
-            'r2_score': round(overall_r2, 4),
-            'predictions': prediction_result['predictions'],
-            'chart': chart_url,
-            'metrics': metrics_dict,
-            'source': 'new_training'
-        }
-
-        return jsonify(final_response)
-
+            print("✅ No outdated predictions found")
+            
+        db.session.commit()
     except Exception as e:
-        import traceback
-        print(f"Unexpected error: {str(e)}")
-        print(traceback.format_exc())
-        return jsonify({
-            'success': False,
-            'error': f"An unexpected error occurred: {str(e)}"
-        })
+        print(f"❌ Error cleaning up old predictions: {e}")
 
 # ... (keep all your other routes the same - they're fine)
 @app.route('/cache/clear', methods=['POST'])
