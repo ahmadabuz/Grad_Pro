@@ -1094,16 +1094,18 @@ cache_thread.start()
 
 @app.route('/history/<city>', methods=['GET'])
 def get_history(city):
-    """Get historical predictions for analysis"""
+    """Get historical predictions for analysis - FIXED"""
     try:
         # Get the last 30 days of predictions
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=30)
 
+        # FIXED: Only get CURRENT predictions for pattern recognition
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= start_date,
-            Prediction.prediction_date <= end_date
+            Prediction.prediction_date <= end_date,
+            Prediction.is_current == True  # Keep this for pattern recognition
         ).order_by(Prediction.prediction_date.asc()).all()
 
         if not predictions:
@@ -1124,20 +1126,22 @@ def get_history(city):
                 'avg_temp': pred.avg_temp,
                 'humidity': pred.humidity,
                 'wind_speed': pred.wind_speed,
-                'condition': pred.condition
+                'condition': pred.condition,
+                'is_current': pred.is_current
             })
 
+        print(f"📈 Pattern recognition: Found {len(result)} CURRENT records for {city}")
         return jsonify({
             'success': True,
             'city': city,
             'predictions': result
         })
     except Exception as e:
+        print(f"❌ Error in pattern recognition: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         })
-
 
 @app.route('/performance/<city>', methods=['GET'])
 def get_performance(city):
@@ -1348,19 +1352,19 @@ def debug_metrics(city):
 
 @app.route('/historical-data/<city>', methods=['GET'])
 def get_historical_data(city):
-    """Get historical weather data for analysis"""
+    """Get historical weather data for analysis - FIXED"""
     try:
         # Get date range from query parameters or use default
         days = request.args.get('days', 30, type=int)
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=days)
 
-        # Get historical predictions
+        # FIXED: Get ALL historical predictions, not just current ones
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= start_date,
-            Prediction.prediction_date <= end_date,
-            Prediction.is_current == True  # Only get the most recent predictions for each date
+            Prediction.prediction_date <= end_date
+            # REMOVED: Prediction.is_current == True  # This was filtering out old data
         ).order_by(Prediction.prediction_date.asc()).all()
 
         if not predictions:
@@ -1381,9 +1385,11 @@ def get_historical_data(city):
                 'wind_speed': pred.wind_speed,
                 'condition': pred.condition,
                 'model_version': pred.model_version,
-                'generated_at': pred.generation_timestamp.isoformat()
+                'generated_at': pred.generation_timestamp.isoformat(),
+                'is_current': pred.is_current  # Add this to see which are current
             })
 
+        print(f"📊 Historical data: Found {len(result)} records for {city} from {start_date} to {end_date}")
         return jsonify({
             'success': True,
             'city': city,
@@ -1394,11 +1400,11 @@ def get_historical_data(city):
             }
         })
     except Exception as e:
+        print(f"❌ Error in historical data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         })
-
 
 @app.route('/historical-performance/<city>', methods=['GET'])
 def get_historical_performance(city):
