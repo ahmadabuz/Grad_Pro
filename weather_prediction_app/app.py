@@ -286,86 +286,158 @@ class WeatherPredictor:
 
         return results
 
-    def create_future_features(self, start_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
-        """Create feature matrix for future predictions starting from a specific date"""
-        future_features_list = []
+def create_future_features(self, last_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
+    """Create feature matrix for future predictions"""
+    future_features_list = []
+    last_features = df[feature_cols].iloc[-1:].to_dict('records')[0]
+    recent_data = df[['avg_c', 'humidity', 'wind_kph']].tail(15).to_dict('records')
+
+    for i in range(future_days):
+        future_date = last_date + timedelta(days=i + 1)  # This is the key line!
+        day_of_year = future_date.timetuple().tm_yday
+
+        # Update time-based features
+        current_features = last_features.copy()
+        current_features['day_of_year'] = day_of_year
+        current_features['day_sin'] = np.sin(2 * np.pi * day_of_year / 365)
+        current_features['day_cos'] = np.cos(2 * np.pi * day_of_year / 365)
+        current_features['month'] = future_date.month
+        current_features['week_of_year'] = future_date.isocalendar().week
+        current_features['is_weekend'] = future_date.weekday() >= 5
+        current_features['is_summer'] = future_date.month in [6, 7, 8]
+        current_features['is_winter'] = future_date.month in [12, 1, 2]
+
+        # Convert to DataFrame for scaling and prediction
+        current_features_df = pd.DataFrame([current_features])[feature_cols]
+        current_features_scaled = scaler_X.transform(current_features_df.values)
+        predicted_scaled = best_model.predict(current_features_scaled)
+        predicted_original = scaler_y.inverse_transform(predicted_scaled)
+
+        # Update the recent_data with the new prediction
+        predicted_data = {
+            'avg_c': predicted_original[0][0],
+            'min_c': predicted_original[0][1],
+            'max_c': predicted_original[0][2],
+            'humidity': predicted_original[0][3],
+            'wind_kph': predicted_original[0][4]
+        }
+        recent_data.append(predicted_data)
+        recent_data = recent_data[-15:]
+
+        # Create a temporary DataFrame from recent_data to calculate updated features
+        temp_recent_df = pd.DataFrame(recent_data)
+
+        # Recalculate lag and rolling features
+        for lag in [1, 2, 3, 7, 14]:
+            for col in ['avg_c', 'humidity', 'wind_kph']:
+                lag_col_name = f'{col}_lag_{lag}'
+                if lag_col_name in feature_cols:
+                    lag_value = temp_recent_df[col].shift(lag).iloc[-1]
+                    current_features[lag_col_name] = lag_value
+
+        for window in [3, 7, 14]:
+            for col in ['avg_c', 'humidity', 'wind_kph']:
+                rolling_mean_col_name = f'{col}_rolling_mean_{window}'
+                rolling_std_col_name = f'{col}_rolling_std_{window}'
+                if rolling_mean_col_name in feature_cols:
+                    rolling_mean_value = temp_recent_df[col].rolling(window=window).mean().iloc[-1]
+                    current_features[rolling_mean_col_name] = rolling_mean_value
+                if rolling_std_col_name in feature_cols:
+                    rolling_std_value = temp_recent_df[col].rolling(window=window).std().iloc[-1]
+                    current_features[rolling_std_col_name] = rolling_std_value
+
+        # Recalculate difference features
+        for diff in [1, 7]:
+            for col in ['avg_c', 'wind_kph']:
+                diff_col_name = f'{col}_diff_{diff}'
+                if diff_col_name in feature_cols:
+                    diff_value = temp_recent_df[col].diff(diff).iloc[-1]
+                    current_features[diff_col_name] = diff_value
+
+        # Recalculate interaction features
+        current_features['temp_humidity_interaction'] = predicted_data['avg_c'] * predicted_data['humidity']
+        current_features['temp_wind_interaction'] = predicted_data['avg_c'] * predicted_data['wind_kph']
+
+        # Store the updated features
+        future_features_list.append(pd.DataFrame([current_features])[feature_cols].values.flatten())
+        last_features = current_features
+
+    return np.array(future_features_list)
+
+def predict_weather(self, days=7):
+    """Generate weather predictions"""
+    try:
+        if self.model is None:
+            return {"error": "Model not trained"}
+
+        last_date = self.df['date'].iloc[-1]  # This gets the last historical date
+        future_X = self.create_future_features(
+            last_date, days, self.df, self.feature_cols,
+            self.model, self.scaler_X, self.scaler_y
+        )
+
+        # Scale and predict
+        future_X_scaled = self.scaler_X.transform(future_X)
+        future_y_scaled = self.model.predict(future_X_scaled)
+        future_y = self.scaler_y.inverse_transform(future_y_scaled)
+
+        # Create predictions DataFrame
+        predictions_df = pd.DataFrame(
+            future_y,
+            columns=['avg_temp', 'min_temp', 'max_temp', 'humidity', 'wind']
+        )
+
+        predictions_df['humidity'] = predictions_df['humidity'].clip(0, 100)
+        predictions_df['min_temp'] = predictions_df['min_temp'].clip(-60, 60)
+        predictions_df['max_temp'] = predictions_df['max_temp'].clip(-60, 60)
+        predictions_df['avg_temp'] = predictions_df['avg_temp'].clip(-60, 60)
+        predictions_df['wind'] = predictions_df['wind'].clip(0, 300)
         
-        # Get the most recent features as a starting point
-        last_features = df[feature_cols].iloc[-1:].to_dict('records')[0]
-        recent_data = df[['avg_c', 'humidity', 'wind_kph']].tail(15).to_dict('records')
+        for i, row in predictions_df.iterrows():
+            if row['min_temp'] > row['avg_temp']:
+                predictions_df.at[i, 'avg_temp'] = (row['min_temp'] + row['max_temp']) / 2
+            if row['avg_temp'] > row['max_temp']:
+                predictions_df.at[i, 'avg_temp'] = (row['min_temp'] + row['max_temp']) / 2
 
-        for i in range(future_days):
-            future_date = start_date + timedelta(days=i)
-            day_of_year = future_date.timetuple().tm_yday
+        # This is the key part - start from last_date + 1 day
+        future_dates = [last_date + timedelta(days=i + 1) for i in range(days)]
+        predictions_df['date'] = future_dates
+        predictions_df['date'] = pd.to_datetime(predictions_df['date'].dt.strftime('%Y-%m-%d'))
 
-            # Update time-based features for the future date
-            current_features = last_features.copy()
-            current_features['day_of_year'] = day_of_year
-            current_features['day_sin'] = np.sin(2 * np.pi * day_of_year / 365)
-            current_features['day_cos'] = np.cos(2 * np.pi * day_of_year / 365)
-            current_features['month'] = future_date.month
-            current_features['week_of_year'] = future_date.isocalendar().week
-            current_features['is_weekend'] = future_date.weekday() >= 5
-            current_features['is_summer'] = future_date.month in [6, 7, 8]
-            current_features['is_winter'] = future_date.month in [12, 1, 2]
+        if 'precip_mm' in self.df.columns:
+            recent_precip = self.df['precip_mm'].tail(30).mean()
+        else:
+            recent_precip = 0
 
-            # Convert to DataFrame for scaling and prediction
-            current_features_df = pd.DataFrame([current_features])[feature_cols]
-            current_features_scaled = scaler_X.transform(current_features_df.values)
-            predicted_scaled = best_model.predict(current_features_scaled)
-            predicted_original = scaler_y.inverse_transform(predicted_scaled)
+        predictions_list = []
+        for i, (_, row) in enumerate(predictions_df.iterrows()):
+            avg_temp = row['avg_temp']
+            min_temp = row['min_temp']
+            max_temp = row['max_temp']
+            humidity = row['humidity']
+            wind = row['wind']
+            month = row['date'].month
 
-            # Update the recent_data with the new prediction
-            predicted_data = {
-                'avg_c': predicted_original[0][0],
-                'min_c': predicted_original[0][1],
-                'max_c': predicted_original[0][2],
-                'humidity': predicted_original[0][3],
-                'wind_kph': predicted_original[0][4]
-            }
-            recent_data.append(predicted_data)
-            recent_data = recent_data[-15:]
+            condition = self.determine_weather_condition(
+                avg_temp, min_temp, max_temp, humidity, wind,
+                month, recent_precip, i
+            )
 
-            # Create a temporary DataFrame from recent_data to calculate updated features
-            temp_recent_df = pd.DataFrame(recent_data)
+            predictions_list.append({
+                'date': row['date'],
+                'min_temp': round(row['min_temp'], 1),
+                'max_temp': round(row['max_temp'], 1),
+                'avg_temp': round(row['avg_temp'], 1),
+                'humidity': round(row['humidity'], 1),
+                'wind': round(row['wind'], 1),
+                'condition': condition
+            })
 
-            # Recalculate lag and rolling features
-            for lag in [1, 2, 3, 7, 14]:
-                for col in ['avg_c', 'humidity', 'wind_kph']:
-                    lag_col_name = f'{col}_lag_{lag}'
-                    if lag_col_name in feature_cols:
-                        lag_value = temp_recent_df[col].shift(lag).iloc[-1]
-                        current_features[lag_col_name] = lag_value
+        return {"success": True, "predictions": predictions_list}
 
-            for window in [3, 7, 14]:
-                for col in ['avg_c', 'humidity', 'wind_kph']:
-                    rolling_mean_col_name = f'{col}_rolling_mean_{window}'
-                    rolling_std_col_name = f'{col}_rolling_std_{window}'
-                    if rolling_mean_col_name in feature_cols:
-                        rolling_mean_value = temp_recent_df[col].rolling(window=window).mean().iloc[-1]
-                        current_features[rolling_mean_col_name] = rolling_mean_value
-                    if rolling_std_col_name in feature_cols:
-                        rolling_std_value = temp_recent_df[col].rolling(window=window).std().iloc[-1]
-                        current_features[rolling_std_col_name] = rolling_std_value
-
-            # Recalculate difference features
-            for diff in [1, 7]:
-                for col in ['avg_c', 'wind_kph']:
-                    diff_col_name = f'{col}_diff_{diff}'
-                    if diff_col_name in feature_cols:
-                        diff_value = temp_recent_df[col].diff(diff).iloc[-1]
-                        current_features[diff_col_name] = diff_value
-
-            # Recalculate interaction features
-            current_features['temp_humidity_interaction'] = predicted_data['avg_c'] * predicted_data['humidity']
-            current_features['temp_wind_interaction'] = predicted_data['avg_c'] * predicted_data['wind_kph']
-
-            # Store the updated features
-            future_features_list.append(pd.DataFrame([current_features])[feature_cols].values.flatten())
-            last_features = current_features
-
-        return np.array(future_features_list)
-
+    except Exception as e:
+        return {"error": str(e)}
+        
     def train_model(self, city):
         """Complete model training pipeline"""
         try:
@@ -786,63 +858,45 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
         return False
 
 def get_latest_predictions_from_db(city, days=7):
-    """Retrieve the latest predictions from the database starting from TODAY"""
+    """Retrieve the latest predictions from the database"""
     try:
-        # Get today's date in UTC to match server timezone
-        today_utc = datetime.utcnow().date()
-        print(f"🔍 Database lookup for {city} on {today_utc} (UTC)")
-        
-        # Get predictions generated TODAY (in UTC time)
+        today = datetime.now().date()
+
+        # Get the most recent CURRENT predictions for this city starting from today
         predictions = Prediction.query.filter(
             Prediction.city == city,
-            Prediction.prediction_date >= today_utc,
+            Prediction.prediction_date >= today,
             Prediction.is_current == True
         ).order_by(Prediction.prediction_date.asc()).limit(days).all()
 
-        print(f"📊 Found {len(predictions)} predictions in database")
-        
         if not predictions or len(predictions) < days:
-            print("❌ Not enough predictions found")
-            return None
-
-        # Check if any of these predictions were generated today
-        predictions_generated_today = [
-            pred for pred in predictions 
-            if pred.generation_timestamp.date() == today_utc
-        ]
-        
-        if len(predictions_generated_today) < days:
-            print(f"❌ Only {len(predictions_generated_today)} predictions generated today, need {days}")
             return None
 
         # Verify we have a complete 7-day forecast starting from today
         prediction_dates = [pred.prediction_date for pred in predictions]
-        expected_dates = [today_utc + timedelta(days=i) for i in range(days)]
-        
-        print(f"📅 Expected: {expected_dates}")
-        print(f"📅 Found: {prediction_dates}")
-        
+        expected_dates = [today + timedelta(days=i) for i in range(days)]
+
         if prediction_dates != expected_dates:
-            print(f"❌ Date mismatch")
             return None
 
+        # Convert to list of dictionaries
         result = []
         for pred in predictions:
             result.append({
                 'date': pred.prediction_date,
-                'min_temp': float(pred.min_temp),
-                'max_temp': float(pred.max_temp),
-                'avg_temp': float(pred.avg_temp),
-                'humidity': float(pred.humidity),
-                'wind': float(pred.wind_speed),
-                'condition': str(pred.condition)
+                'min_temp': pred.min_temp,
+                'max_temp': pred.max_temp,
+                'avg_temp': pred.avg_temp,
+                'humidity': pred.humidity,
+                'wind': pred.wind_speed,
+                'condition': pred.condition
             })
 
-        print(f"✅ Successfully retrieved predictions for {expected_dates[0]} to {expected_dates[-1]}")
         return result
     except Exception as e:
-        print(f"❌ Error retrieving from database: {e}")
+        print(f"Error retrieving from database: {e}")
         return None
+        
 # Initialize predictor
 predictor = WeatherPredictor()
 
