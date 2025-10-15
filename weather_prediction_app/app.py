@@ -789,14 +789,27 @@ def get_latest_predictions_from_db(city, days=7):
     """Retrieve the latest predictions from the database starting from TODAY"""
     try:
         today = datetime.now().date()
-        today_start = datetime.combine(today, datetime.min.time())  # Start of today
         print(f"🔍 Database lookup for {city} on {today}")
         
-        # FIXED: Proper datetime comparison
+        # Get the most recent generation timestamp for today's predictions
+        latest_generation = db.session.query(
+            db.func.max(Prediction.generation_timestamp)
+        ).filter(
+            Prediction.city == city,
+            Prediction.prediction_date >= today
+        ).scalar()
+        
+        if not latest_generation:
+            print("❌ No recent predictions found")
+            return None
+            
+        print(f"📅 Latest generation: {latest_generation}")
+        
+        # FIXED: Get predictions from the latest generation batch
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= today,
-            Prediction.generation_timestamp >= today_start,  # FIXED: Use datetime, not date
+            Prediction.generation_timestamp == latest_generation,
             Prediction.is_current == True
         ).order_by(Prediction.prediction_date.asc()).limit(days).all()
 
@@ -810,8 +823,8 @@ def get_latest_predictions_from_db(city, days=7):
         prediction_dates = [pred.prediction_date for pred in predictions]
         expected_dates = [today + timedelta(days=i) for i in range(days)]
         
-        print(f"📅 Expected dates: {expected_dates}")
-        print(f"📅 Found dates: {prediction_dates}")
+        print(f"📅 Expected dates: {[d.strftime('%Y-%m-%d') for d in expected_dates]}")
+        print(f"📅 Found dates: {[d.strftime('%Y-%m-%d') for d in prediction_dates]}")
         
         # Check if predictions are for consecutive days starting from today
         if prediction_dates != expected_dates:
@@ -836,7 +849,6 @@ def get_latest_predictions_from_db(city, days=7):
     except Exception as e:
         print(f"❌ Error retrieving from database: {e}")
         return None
-
 # Initialize predictor
 predictor = WeatherPredictor()
 
@@ -1708,7 +1720,61 @@ def download_all_performance_data(city):
             'error': str(e)
         })
 
-
+@app.route('/fix-today-predictions')
+def fix_today_predictions():
+    """Force generate predictions for today and fix any date issues"""
+    try:
+        today = datetime.now().date()
+        city = "Amman"
+        
+        print(f"🔄 Force generating predictions for {today}")
+        
+        # Mark all current predictions as not current
+        reset_count = Prediction.query.filter(
+            Prediction.is_current == True
+        ).update({'is_current': False}, synchronize_session=False)
+        
+        db.session.commit()
+        print(f"✅ Reset {reset_count} predictions")
+        
+        # Force new training and prediction
+        training_result = predictor.train_model(city)
+        if 'error' in training_result:
+            return jsonify({'error': training_result['error']})
+            
+        prediction_result = predictor.predict_weather(days=7)
+        if 'error' in prediction_result:
+            return jsonify({'error': prediction_result['error']})
+        
+        # Save to database
+        model_metrics = {}
+        if hasattr(predictor, 'results') and predictor.best_model_name:
+            best_model_result = predictor.results[predictor.best_model_name]
+            model_metrics = best_model_result.get('detailed_metrics', {})
+        
+        save_success = save_predictions_to_db(
+            city,
+            prediction_result['predictions'],
+            predictor.best_model_name,
+            model_metrics
+        )
+        
+        if save_success:
+            # Verify the new predictions
+            new_predictions = get_latest_predictions_from_db(city, 7)
+            if new_predictions:
+                dates = [p['date'].strftime('%Y-%m-%d') for p in new_predictions]
+                return jsonify({
+                    'success': True,
+                    'message': f'Generated new predictions starting from {today}',
+                    'prediction_dates': dates,
+                    'today': today.strftime('%Y-%m-%d')
+                })
+        
+        return jsonify({'error': 'Failed to generate new predictions'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 
 
