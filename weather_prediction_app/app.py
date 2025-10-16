@@ -75,7 +75,7 @@ class ModelPerformance(db.Model):
     rmse = db.Column(db.Float, nullable=False)
     detailed_metrics = db.Column(db.JSON, nullable=False)
 
-API_KEY = "245159b18d634837900112029250310"
+API_KEY = "387452ec05eb4b38b74113541251610"
 BASE_URL = "https://api.weatherapi.com/v1"
 
 # Keep-alive system
