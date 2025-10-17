@@ -36,7 +36,7 @@ def get_database_uri():
         instance_path = os.path.join(os.getcwd(), 'instance')
         Path(instance_path).mkdir(exist_ok=True)
         db_path = os.path.join(instance_path, 'weather_predictions.db')
-        print(f"📁 Using persistent database at: {db_path}")
+        print(f"Using persistent database at: {db_path}")
         return f"sqlite:///{db_path}"
     else:
         return "sqlite:///weather_predictions.db"
@@ -410,7 +410,7 @@ class WeatherPredictor:
 
             # FIX: Start from TODAY instead of last historical date
             today = datetime.now().date()
-            print(f"🚀 Generating predictions starting from: {today}")
+            print(f"Generating predictions starting from: {today}")
             
             # Use today as the starting point
             future_X = self.create_future_features(
@@ -480,11 +480,11 @@ class WeatherPredictor:
                     'condition': condition
                 })
 
-            print(f"✅ Generated predictions for: {[d.strftime('%Y-%m-%d') for d in future_dates]}")
+            print(f"Generated predictions for: {[d.strftime('%Y-%m-%d') for d in future_dates]}")
             return {"success": True, "predictions": predictions_list}
 
         except Exception as e:
-            print(f"❌ Prediction error: {e}")
+            print(f"Prediction error: {e}")
             return {"error": str(e)}
 
     def determine_weather_condition(self, avg_temp, min_temp, max_temp, humidity, wind, month, recent_precip, day_index):
@@ -686,13 +686,13 @@ def cleanup_old_predictions():
         ).update({'is_current': False}, synchronize_session=False)
         
         if outdated:
-            print(f"✅ Marked {outdated} outdated predictions as not current")
+            print(f"Marked {outdated} outdated predictions as not current")
         else:
-            print("✅ No outdated predictions found")
+            print("No outdated predictions found")
             
         db.session.commit()
     except Exception as e:
-        print(f"❌ Error cleaning up old predictions: {e}")
+        print(f"Error cleaning up old predictions: {e}")
 
 def save_predictions_to_db(city, predictions, model_name, model_metrics):
     """Save predictions to the database, preserving historical data"""
@@ -785,7 +785,7 @@ def get_latest_predictions_from_db(city, days=7):
     try:
         today = datetime.now().date()
 
-        # Get the most recent CURRENT predictions for this city starting from today
+        # Get the most recent current predictions for this city starting from today
         predictions = Prediction.query.filter(
             Prediction.city == city,
             Prediction.prediction_date >= today,
@@ -820,7 +820,7 @@ def get_latest_predictions_from_db(city, days=7):
         print(f"Error retrieving from database: {e}")
         return None
         
-# Initialize predictor
+#Initialize predictor
 predictor = WeatherPredictor()
 
 @app.route('/health')
@@ -835,7 +835,7 @@ def debug_current():
         today = datetime.now().date()
         city = "Amman"
         
-        print(f"🔍 DEBUG: Today is {today}")
+        print(f"DEBUG: Today is {today}")
         
         all_current = Prediction.query.filter(
             Prediction.is_current == True
@@ -1635,7 +1635,7 @@ def reset_database():
             # Recreate all tables
             db.create_all()
             
-            print("✅ Database completely reset - all tables recreated")
+            print("Database completely reset , all tables recreated")
             
         return jsonify({
             'success': True,
@@ -1709,7 +1709,7 @@ def fix_today_predictions():
         today = datetime.now().date()
         city = "Amman"
         
-        print(f"🔄 Force generating predictions for {today}")
+        print(f"Force generating predictions for {today}")
         
         # Mark all current predictions as not current
         reset_count = Prediction.query.filter(
@@ -1717,7 +1717,7 @@ def fix_today_predictions():
         ).update({'is_current': False}, synchronize_session=False)
         
         db.session.commit()
-        print(f"✅ Reset {reset_count} predictions")
+        print(f"Reset {reset_count} predictions")
         
         # Force new training and prediction
         training_result = predictor.train_model(city)
