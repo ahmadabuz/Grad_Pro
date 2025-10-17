@@ -31,25 +31,25 @@ import shutil
 app = Flask(__name__)
 
 def get_database_uri():
-    # Priority 1: Supabase
-    supabase_url = os.environ.get('SUPABASE_URL')
-    if supabase_url and supabase_url != 'postgresql://postgres:[YOUR-PASSWORD]@db.cvznilxsqbexhywisntv.supabase.co:5432/postgres':
-        # Make sure it's not the template URL
-        if '[YOUR-PASSWORD]' not in supabase_url:
-            print("✅ Using Supabase PostgreSQL")
-            return supabase_url
-    
-    # Priority 2: Check if we're on Render but no database
     if 'RENDER' in os.environ:
-        # Fallback to SQLite on Render
-        print("⚠️ No Supabase URL found, using SQLite on Render")
-        instance_path = os.path.join(os.getcwd(), 'instance')
-        Path(instance_path).mkdir(exist_ok=True)
-        db_path = os.path.join(instance_path, 'weather_predictions.db')
-        return f"sqlite:///{db_path}"
-    
-    # Local development
-    return "sqlite:///weather_predictions.db"
+        # Use Render's PostgreSQL
+        database_url = os.environ.get('DATABASE_URL')
+        
+        if database_url:
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql://', 1)
+            print(f"✅ Using PostgreSQL: {database_url}")
+            return database_url
+        else:
+            # Fallback to SQLite if DATABASE_URL not set
+            print("⚠️ DATABASE_URL not found, falling back to SQLite")
+            instance_path = os.path.join(os.getcwd(), 'instance')
+            Path(instance_path).mkdir(exist_ok=True)
+            db_path = os.path.join(instance_path, 'weather_predictions.db')
+            return f"sqlite:///{db_path}"
+    else:
+        # Local development
+        return "sqlite:///weather_predictions.db"
     
 db = SQLAlchemy(app)
 
