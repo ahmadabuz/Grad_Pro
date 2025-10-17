@@ -30,13 +30,12 @@ import shutil
 
 app = Flask(__name__)
 
-# POSTGRESQL DATABASE CONFIGURATION - THIS WILL PERSIST!
 def get_database_uri():
     # Priority 1: Supabase
     supabase_url = os.environ.get('SUPABASE_URL')
-    if supabase_url and supabase_url != 'postgresql://postgres:6d4FxFGAbX9tntdD@db.cvznilxsqbexhywisntv.supabase.co:5432/postgres':
+    if supabase_url and supabase_url != 'postgresql://postgres:[YOUR-PASSWORD]@db.cvznilxsqbexhywisntv.supabase.co:5432/postgres':
         # Make sure it's not the template URL
-        if '6d4FxFGAbX9tntdD' not in supabase_url:
+        if '[YOUR-PASSWORD]' not in supabase_url:
             print("✅ Using Supabase PostgreSQL")
             return supabase_url
     
