@@ -1669,14 +1669,15 @@ def init_database():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/fix-column')
-def fix_column():
+@app.route('/fix-column-length')
+def fix_column_length():
     try:
-        db.engine.execute("ALTER TABLE predictions ALTER COLUMN condition TYPE TEXT;")
-        return "Column fixed! Condition now supports unlimited length."
+        from sqlalchemy import text
+        db.session.execute(text("ALTER TABLE predictions ALTER COLUMN condition TYPE TEXT;"))
+        db.session.commit()
+        return "Success , condition column now supports unlimited length. All predictions will save properly."
     except Exception as e:
         return f"Error: {str(e)}"
-
 
 
 
