@@ -1708,7 +1708,11 @@ keep_alive_manager.start_keep_alive()
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
-        print("Database tables created/verified")
-        print(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        try:
+            db.create_all()
+            print("Database tables created/verified")
+            print(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        except Exception as e:
+            print(f"Error creating tables: {e}")
+            print(" Tables might already exist, continuing...")
     app.run(debug=True)
