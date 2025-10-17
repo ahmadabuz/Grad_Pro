@@ -1647,6 +1647,37 @@ def deploy_check():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+@app.route('/init-db')
+def init_database():
+    """Initialize database tables - RUN THIS FIRST"""
+    try:
+        with app.app_context():
+            # Drop all tables if they exist
+            db.drop_all()
+            # Create all tables
+            db.create_all()
+            
+            print("Database tables created successfully!")
+            print("Tables: predictions, model_performance")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Database initialized successfully!',
+                'tables_created': ['predictions', 'model_performance'],
+                'database_type': 'PostgreSQL'
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+
+
+
+
+
+
+
+
 @app.route('/fix-today-predictions')
 def fix_today_predictions():
     """Force generate predictions for today and fix any date issues"""
