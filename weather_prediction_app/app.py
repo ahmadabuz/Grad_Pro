@@ -50,45 +50,28 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 def backup_database():
-    """Attempt to backup/restore database file between deploys"""
     if 'RENDER' in os.environ:
         try:
-            # Define paths
-            persistent_path = '/tmp/weather_predictions.db'  # Render's /tmp persists between deploys
+            persistent_path = '/tmp/weather_predictions.db'
             current_db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace('sqlite:///', '')
-            
-            print(f"Backup system: Current DB path: {current_db_path}")
-            print(f"Backup system: Persistent path: {persistent_path}")
-            
-            # Check if persistent backup exists
-            if os.path.exists(persistent_path):
-                print("Backup system: Found persistent database backup")
-                
-                # If current database doesn't exist or is empty, restore from backup
-                if not os.path.exists(current_db_path) or os.path.getsize(current_db_path) == 0:
-                    shutil.copy2(persistent_path, current_db_path)
-                    print("Backup system: Restored database from persistent backup")
-                else:
-                    # Current DB exists, check which is newer
-                    current_mtime = os.path.getmtime(current_db_path) if os.path.exists(current_db_path) else 0
-                    backup_mtime = os.path.getmtime(persistent_path)
-                    
-                    if backup_mtime > current_mtime:
-                        shutil.copy2(persistent_path, current_db_path)
-                        print("Backup system: Restored database (backup was newer)")
-                    else:
-                        shutil.copy2(current_db_path, persistent_path)
-                        print("Backup system: Backed up current database")
+            print(f"Backup System: Current DB: {current_db_path}")
+            print(f"Backup System: Persistent: {persistent_path}")
+            if os.path.exists(current_db_path) and os.path.getsize(current_db_path) > 0:
+                shutil.copy2(current_db_path, persistent_path)
+                print("Backup System: Current database backed up to persistent storage")
+                return True
+            elif os.path.exists(persistent_path) and os.path.getsize(persistent_path) > 0:
+                shutil.copy2(persistent_path, current_db_path)
+                print("Backup System: Database restored from persistent storage")
+                return True
             else:
-                # No backup exists yet, create one if current DB exists
-                if os.path.exists(current_db_path) and os.path.getsize(current_db_path) > 0:
-                    shutil.copy2(current_db_path, persistent_path)
-                    print("Backup system: Created initial database backup")
-                else:
-                    print("Backup system: No existing database found, will create new one")
-                    
+                print("Backup System: No database found, will create new one")
+                return False
         except Exception as e:
             print(f"Backup system error: {e}")
+            return False
+    return False 
+
 
 # Run backup system on startup
 backup_database()
@@ -1085,7 +1068,9 @@ def predict():
 
         if not save_success:
             print("Warning: Failed to save predictions to database")
-
+        
+        backup_database()
+        
         # Build the final response object
         final_response = {
             'success': True,
@@ -1751,6 +1736,34 @@ def download_all_performance_data(city):
             'success': False,
             'error': str(e)
         })
+
+@app.route('/backup-now')
+def backup_now():
+    """Force immediate database backup"""
+    try:
+        success = backup_database()
+        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace('sqlite:///', '')
+        db_exists = os.path.exists(db_path)
+        backup_path = '/tmp/weather_predictions.db'
+        backup_exists = os.path.exists(backup_path)
+        
+        return jsonify({
+            'success': success,
+            'message': 'Backup completed' if success else 'Backup failed',
+            'database_exists': db_exists,
+            'backup_exists': backup_exists,
+            'database_size': os.path.getsize(db_path) if db_exists else 0,
+            'backup_size': os.path.getsize(backup_path) if backup_exists else 0
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+
+
+
+
+
 
 @app.route('/fix-today-predictions')
 def fix_today_predictions():
