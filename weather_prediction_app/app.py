@@ -32,21 +32,28 @@ app = Flask(__name__)
 
 # POSTGRESQL DATABASE CONFIGURATION - THIS WILL PERSIST!
 def get_database_uri():
+    # Priority 1: Supabase (free forever)
+    supabase_url = os.environ.get('SUPABASE_URL')
+    if supabase_url:
+        print("Using Supabase PostgreSQL (FREE FOREVER)")
+        return supabase_url
+    
+    # Priority 2: Render PostgreSQL (temporary)
     if 'RENDER' in os.environ:
-        # Use Render's PostgreSQL - THIS PERSISTS BETWEEN DEPLOYS!
         database_url = os.environ.get('DATABASE_URL')
-        if database_url and database_url.startswith('postgres://'):
-            database_url = database_url.replace('postgres://', 'postgresql://', 1)
-        print(f"Using PostgreSQL database: {database_url}")
-        return database_url
-    else:
-        # Local SQLite for development
-        return "sqlite:///weather_predictions.db"
-
-app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
-app.config["SQLALCHEMY_ECHO"] = False
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
+        if database_url:
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql://', 1)
+            print("Using Render PostgreSQL (expires Nov 16)")
+            return database_url
+    
+    # Fallback to SQLite
+    print("Using SQLite (data may not persist)")
+    instance_path = os.path.join(os.getcwd(), 'instance')
+    Path(instance_path).mkdir(exist_ok=True)
+    db_path = os.path.join(instance_path, 'weather_predictions.db')
+    return f"sqlite:///{db_path}"
+    
 db = SQLAlchemy(app)
 
 # Define models AFTER db initialization
