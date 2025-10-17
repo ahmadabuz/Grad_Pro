@@ -30,16 +30,17 @@ import shutil
 
 app = Flask(__name__)
 
-# FIXED Database Configuration with Backup/Restore
+# POSTGRESQL DATABASE CONFIGURATION - THIS WILL PERSIST!
 def get_database_uri():
     if 'RENDER' in os.environ:
-        # On Render, ensure we use a persistent directory
-        instance_path = os.path.join(os.getcwd(), 'instance')
-        Path(instance_path).mkdir(exist_ok=True)
-        db_path = os.path.join(instance_path, 'weather_predictions.db')
-        print(f"Using persistent database at: {db_path}")
-        return f"sqlite:///{db_path}"
+        # Use Render's PostgreSQL - THIS PERSISTS BETWEEN DEPLOYS!
+        database_url = os.environ.get('DATABASE_URL')
+        if database_url and database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        print(f"Using PostgreSQL database: {database_url}")
+        return database_url
     else:
+        # Local SQLite for development
         return "sqlite:///weather_predictions.db"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
@@ -47,33 +48,6 @@ app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
-
-def backup_database():
-    if 'RENDER' in os.environ:
-        try:
-            persistent_path = '/tmp/weather_predictions.db'
-            current_db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace('sqlite:///', '')
-            print(f"Backup System: Current DB: {current_db_path}")
-            print(f"Backup System: Persistent: {persistent_path}")
-            if os.path.exists(current_db_path) and os.path.getsize(current_db_path) > 0:
-                shutil.copy2(current_db_path, persistent_path)
-                print("Backup System: Current database backed up to persistent storage")
-                return True
-            elif os.path.exists(persistent_path) and os.path.getsize(persistent_path) > 0:
-                shutil.copy2(persistent_path, current_db_path)
-                print("Backup System: Database restored from persistent storage")
-                return True
-            else:
-                print("Backup System: No database found, will create new one")
-                return False
-        except Exception as e:
-            print(f"Backup system error: {e}")
-            return False
-    return False 
-
-
-# Run backup system on startup
-backup_database()
 
 # Define models AFTER db initialization
 class Prediction(db.Model):
@@ -803,9 +777,6 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
 
         db.session.commit()
         
-        # Backup database after saving new predictions
-        backup_database()
-        
         return True
     except Exception as e:
         db.session.rollback()
@@ -882,13 +853,9 @@ def debug_current():
                 'is_current': pred.is_current
             })
         
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace('sqlite:///', '')
-        db_exists = os.path.exists(db_path)
-        
         return jsonify({
             'today': today.isoformat(),
-            'database_file': db_path,
-            'database_exists': db_exists,
+            'database_type': 'PostgreSQL' if 'postgresql' in app.config["SQLALCHEMY_DATABASE_URI"] else 'SQLite',
             'all_current_predictions': current_data,
             'total_current': len(current_data)
         })
@@ -1067,9 +1034,7 @@ def predict():
 
         if not save_success:
             print("Warning: Failed to save predictions to database")
-        
-        backup_database()
-        
+
         # Build the final response object
         final_response = {
             'success': True,
@@ -1207,78 +1172,6 @@ def get_performance(city):
             'error': str(e)
         })
 
-'''
-@app.route('/reset-db')
-def reset_db():
-    """Temporary route to reset the database with new schema"""
-    try:
-        with app.app_context():
-            db.drop_all()
-            db.create_all()
-            print("Database reset successfully")
-            return jsonify({'success': True, 'message': 'Database reset successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-'''
-
-
-
-@app.route('/check-schema')
-def check_schema():
-    """Check the database schema"""
-    try:
-        conn = sqlite3.connect('weather_predictions.db')
-        cursor = conn.cursor()
-
-        # Check predictions table columns
-        cursor.execute("PRAGMA table_info(predictions)")
-        columns = cursor.fetchall()
-
-        conn.close()
-
-        column_names = [col[1] for col in columns]
-        return jsonify({
-            'success': True,
-            'columns': column_names,
-            'has_is_current': 'is_current' in column_names,
-            'has_version': 'version' in column_names
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-
-
-@app.route('/debug-history')
-def debug_history():
-    """Debug route to see all historical data"""
-    try:
-        # Get all predictions for a city
-        predictions = Prediction.query.filter_by(city='Amman').order_by(
-            Prediction.prediction_date.asc(),
-            Prediction.version.desc()
-        ).all()
-
-        result = []
-        for pred in predictions:
-            result.append({
-                'date': pred.prediction_date.isoformat(),
-                'generated': pred.generation_timestamp.isoformat(),
-                'version': pred.version,
-                'is_current': pred.is_current,
-                'avg_temp': pred.avg_temp,
-                'model': pred.model_version
-            })
-
-        return jsonify({
-            'success': True,
-            'predictions': result,
-            'total_count': len(predictions),
-            'current_count': len([p for p in predictions if p.is_current])
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-
 @app.route('/debug-db')
 def debug_db():
     """Debug database state"""
@@ -1314,7 +1207,8 @@ def debug_db():
             'predictions': predictions_data,
             'performance': performance_data,
             'prediction_count': len(predictions_data),
-            'performance_count': len(performance_data)
+            'performance_count': len(performance_data),
+            'database_type': 'PostgreSQL' if 'postgresql' in app.config["SQLALCHEMY_DATABASE_URI"] else 'SQLite'
         })
     except Exception as e:
         return jsonify({'error': str(e)})
@@ -1657,32 +1551,7 @@ def download_all_weather_data(city):
             'success': False,
             'error': str(e)
         })
-'''
-@app.route('/reset-database')
-def reset_database():
-    """Completely reset the database and start fresh from today"""
-    try:
-        with app.app_context():
-            # Drop all tables
-            db.drop_all()
-            
-            # Recreate all tables
-            db.create_all()
-            
-            print("Database completely reset , all tables recreated")
-            
-        return jsonify({
-            'success': True,
-            'message': 'Database completely reset. All historical data cleared. Ready for new predictions starting from today.',
-            'reset_date': datetime.now().date().isoformat()
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        })
-'''
+
 @app.route('/download-all-performance-data/<city>', methods=['GET'])
 def download_all_performance_data(city):
     """Download ALL model performance data as CSV from database"""
@@ -1737,27 +1606,6 @@ def download_all_performance_data(city):
             'error': str(e)
         })
 
-@app.route('/backup-now')
-def backup_now():
-    """Force immediate database backup"""
-    try:
-        success = backup_database()
-        db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace('sqlite:///', '')
-        db_exists = os.path.exists(db_path)
-        backup_path = '/tmp/weather_predictions.db'
-        backup_exists = os.path.exists(backup_path)
-        
-        return jsonify({
-            'success': success,
-            'message': 'Backup completed' if success else 'Backup failed',
-            'database_exists': db_exists,
-            'backup_exists': backup_exists,
-            'database_size': os.path.getsize(db_path) if db_exists else 0,
-            'backup_size': os.path.getsize(backup_path) if backup_exists else 0
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
 @app.route('/deploy-check')
 def deploy_check():
     """Check if it's safe to deploy based on Jordan time - ONLY 3:00 AM and later"""
@@ -1793,15 +1641,11 @@ def deploy_check():
             'utc_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
             'current_hour': current_hour,
             'current_minute': current_minute,
-            'message': message
+            'message': message,
+            'database_type': 'PostgreSQL' if 'postgresql' in app.config["SQLALCHEMY_DATABASE_URI"] else 'SQLite'
         })
     except Exception as e:
         return jsonify({'error': str(e)})
-
-
-
-
-
 
 @app.route('/fix-today-predictions')
 def fix_today_predictions():
@@ -1859,17 +1703,12 @@ def fix_today_predictions():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-
-
-
-
-
-
-
 # Start keep-alive system when app loads
 keep_alive_manager.start_keep_alive()
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        print("Database tables created/verified")
+        print(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
     app.run(debug=True)
