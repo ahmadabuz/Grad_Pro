@@ -32,18 +32,25 @@ app = Flask(__name__)
 
 # POSTGRESQL DATABASE CONFIGURATION - THIS WILL PERSIST!
 def get_database_uri():
-    # Priority 1: Supabase (free forever)
+    # Priority 1: Supabase
     supabase_url = os.environ.get('SUPABASE_URL')
-    if supabase_url:
-        print("Using Supabase PostgreSQL (FREE FOREVER)")
-        return supabase_url
-        
-    # Fallback to SQLite
-    print("Using SQLite (data may not persist)")
-    instance_path = os.path.join(os.getcwd(), 'instance')
-    Path(instance_path).mkdir(exist_ok=True)
-    db_path = os.path.join(instance_path, 'weather_predictions.db')
-    return f"sqlite:///{db_path}"
+    if supabase_url and supabase_url != 'postgresql://postgres:kT9XvDWmyucx2lyH@db.cvznilxsqbexhywisntv.supabase.co:5432/postgres':
+        # Make sure it's not the template URL
+        if '[YOUR-PASSWORD]' not in supabase_url:
+            print("✅ Using Supabase PostgreSQL")
+            return supabase_url
+    
+    # Priority 2: Check if we're on Render but no database
+    if 'RENDER' in os.environ:
+        # Fallback to SQLite on Render
+        print("⚠️ No Supabase URL found, using SQLite on Render")
+        instance_path = os.path.join(os.getcwd(), 'instance')
+        Path(instance_path).mkdir(exist_ok=True)
+        db_path = os.path.join(instance_path, 'weather_predictions.db')
+        return f"sqlite:///{db_path}"
+    
+    # Local development
+    return "sqlite:///weather_predictions.db"
     
 db = SQLAlchemy(app)
 
