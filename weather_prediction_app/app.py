@@ -1657,7 +1657,7 @@ def download_all_weather_data(city):
             'success': False,
             'error': str(e)
         })
-
+'''
 @app.route('/reset-database')
 def reset_database():
     """Completely reset the database and start fresh from today"""
@@ -1682,6 +1682,7 @@ def reset_database():
             'success': False,
             'error': str(e)
         })
+'''
 @app.route('/download-all-performance-data/<city>', methods=['GET'])
 def download_all_performance_data(city):
     """Download ALL model performance data as CSV from database"""
@@ -1757,7 +1758,45 @@ def backup_now():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-
+@app.route('/deploy-check')
+def deploy_check():
+    """Check if it's safe to deploy based on Jordan time - ONLY 3:00 AM and later"""
+    try:
+        from datetime import datetime
+        import pytz
+        
+        # Get current time in Jordan
+        jordan_tz = pytz.timezone('Asia/Amman')
+        jordan_time = datetime.now(jordan_tz)
+        current_hour = jordan_time.hour
+        current_minute = jordan_time.minute
+        
+        # Safe to deploy ONLY from 3:00 AM Jordan time onwards
+        is_safe_time = current_hour >= 3
+        
+        # More specific messages
+        if current_hour == 3 and current_minute == 0:
+            message = 'PERFECT! It\'s exactly 3:00 AM Jordan time - SAFE TO DEPLOY!'
+        elif current_hour >= 3:
+            message = f'SAFE TO DEPLOY - It\'s {current_hour:02d}:{current_minute:02d} in Jordan (3:00 AM or later)'
+        else:
+            hours_left = 2 - current_hour
+            minutes_left = 60 - current_minute
+            if current_hour == 2:
+                message = f'Wait {minutes_left} minutes until 3:00 AM Jordan time'
+            else:
+                message = f'Wait {hours_left} hours and {minutes_left} minutes until 3:00 AM Jordan time'
+        
+        return jsonify({
+            'safe_to_deploy': is_safe_time,
+            'jordan_time': jordan_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'utc_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+            'current_hour': current_hour,
+            'current_minute': current_minute,
+            'message': message
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 
 
