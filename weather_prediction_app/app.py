@@ -1669,7 +1669,13 @@ def init_database():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-
+@app.route('/fix-column')
+def fix_column():
+    try:
+        db.engine.execute("ALTER TABLE predictions ALTER COLUMN condition TYPE TEXT;")
+        return "Column fixed! Condition now supports unlimited length."
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 
@@ -1732,6 +1738,8 @@ def fix_today_predictions():
         
     except Exception as e:
         return jsonify({'error': str(e)})
+
+
 
 # Start keep-alive system when app loads
 keep_alive_manager.start_keep_alive()
