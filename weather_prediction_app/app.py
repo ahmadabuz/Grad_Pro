@@ -26,10 +26,11 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib
 import threading
 from pathlib import Path
+import shutil
 
 app = Flask(__name__)
 
-# FIXED Database Configuration
+# FIXED Database Configuration with Backup/Restore
 def get_database_uri():
     if 'RENDER' in os.environ:
         # On Render, ensure we use a persistent directory
@@ -46,6 +47,50 @@ app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
+
+def backup_database():
+    """Attempt to backup/restore database file between deploys"""
+    if 'RENDER' in os.environ:
+        try:
+            # Define paths
+            persistent_path = '/tmp/weather_predictions.db'  # Render's /tmp persists between deploys
+            current_db_path = app.config["SQLALCHEMY_DATABASE_URI"].replace('sqlite:///', '')
+            
+            print(f"Backup system: Current DB path: {current_db_path}")
+            print(f"Backup system: Persistent path: {persistent_path}")
+            
+            # Check if persistent backup exists
+            if os.path.exists(persistent_path):
+                print("Backup system: Found persistent database backup")
+                
+                # If current database doesn't exist or is empty, restore from backup
+                if not os.path.exists(current_db_path) or os.path.getsize(current_db_path) == 0:
+                    shutil.copy2(persistent_path, current_db_path)
+                    print("Backup system: Restored database from persistent backup")
+                else:
+                    # Current DB exists, check which is newer
+                    current_mtime = os.path.getmtime(current_db_path) if os.path.exists(current_db_path) else 0
+                    backup_mtime = os.path.getmtime(persistent_path)
+                    
+                    if backup_mtime > current_mtime:
+                        shutil.copy2(persistent_path, current_db_path)
+                        print("Backup system: Restored database (backup was newer)")
+                    else:
+                        shutil.copy2(current_db_path, persistent_path)
+                        print("Backup system: Backed up current database")
+            else:
+                # No backup exists yet, create one if current DB exists
+                if os.path.exists(current_db_path) and os.path.getsize(current_db_path) > 0:
+                    shutil.copy2(current_db_path, persistent_path)
+                    print("Backup system: Created initial database backup")
+                else:
+                    print("Backup system: No existing database found, will create new one")
+                    
+        except Exception as e:
+            print(f"Backup system error: {e}")
+
+# Run backup system on startup
+backup_database()
 
 # Define models AFTER db initialization
 class Prediction(db.Model):
@@ -774,6 +819,10 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
         db.session.add(performance)
 
         db.session.commit()
+        
+        # Backup database after saving new predictions
+        backup_database()
+        
         return True
     except Exception as e:
         db.session.rollback()
