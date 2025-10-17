@@ -36,7 +36,7 @@ def get_database_uri():
     supabase_url = os.environ.get('SUPABASE_URL')
     if supabase_url and supabase_url != 'postgresql://postgres:6d4FxFGAbX9tntdD@db.cvznilxsqbexhywisntv.supabase.co:5432/postgres':
         # Make sure it's not the template URL
-        if '[YOUR-PASSWORD]' not in supabase_url:
+        if '6d4FxFGAbX9tntdD' not in supabase_url:
             print("✅ Using Supabase PostgreSQL")
             return supabase_url
     
