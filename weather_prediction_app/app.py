@@ -30,27 +30,23 @@ import shutil
 
 app = Flask(__name__)
 
+# POSTGRESQL DATABASE CONFIGURATION - THIS WILL PERSIST!
 def get_database_uri():
     if 'RENDER' in os.environ:
-        # Use Render's PostgreSQL
+        # Use Render's PostgreSQL - THIS PERSISTS BETWEEN DEPLOYS!
         database_url = os.environ.get('DATABASE_URL')
-        
-        if database_url:
-            if database_url.startswith('postgres://'):
-                database_url = database_url.replace('postgres://', 'postgresql://', 1)
-            print(f"✅ Using PostgreSQL: {database_url}")
-            return database_url
-        else:
-            # Fallback to SQLite if DATABASE_URL not set
-            print("⚠️ DATABASE_URL not found, falling back to SQLite")
-            instance_path = os.path.join(os.getcwd(), 'instance')
-            Path(instance_path).mkdir(exist_ok=True)
-            db_path = os.path.join(instance_path, 'weather_predictions.db')
-            return f"sqlite:///{db_path}"
+        if database_url and database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        print(f"Using PostgreSQL database: {database_url}")
+        return database_url
     else:
-        # Local development
+        # Local SQLite for development
         return "sqlite:///weather_predictions.db"
-    
+
+app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
+app.config["SQLALCHEMY_ECHO"] = False
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
 db = SQLAlchemy(app)
 
 # Define models AFTER db initialization
@@ -1651,37 +1647,6 @@ def deploy_check():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-@app.route('/init-db')
-def init_database():
-    """Initialize database tables - RUN THIS FIRST"""
-    try:
-        with app.app_context():
-            # Drop all tables if they exist
-            db.drop_all()
-            # Create all tables
-            db.create_all()
-            
-            print("Database tables created successfully!")
-            print("Tables: predictions, model_performance")
-            
-            return jsonify({
-                'success': True,
-                'message': 'Database initialized successfully!',
-                'tables_created': ['predictions', 'model_performance'],
-                'database_type': 'PostgreSQL'
-            })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-
-
-
-
-
-
-
-
-
 @app.route('/fix-today-predictions')
 def fix_today_predictions():
     """Force generate predictions for today and fix any date issues"""
@@ -1743,11 +1708,7 @@ keep_alive_manager.start_keep_alive()
 
 if __name__ == '__main__':
     with app.app_context():
-        try:
-            db.create_all()
-            print("Database tables created/verified")
-            print(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
-        except Exception as e:
-            print(f"Error creating tables: {e}")
-            print(" Tables might already exist, continuing...")
+        db.create_all()
+        print("✅ Database tables created/verified")
+        print(f"✅ Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
     app.run(debug=True)
