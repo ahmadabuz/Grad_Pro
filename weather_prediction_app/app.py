@@ -37,16 +37,7 @@ def get_database_uri():
     if supabase_url:
         print("Using Supabase PostgreSQL (FREE FOREVER)")
         return supabase_url
-    
-    # Priority 2: Render PostgreSQL (temporary)
-    if 'RENDER' in os.environ:
-        database_url = os.environ.get('DATABASE_URL')
-        if database_url:
-            if database_url.startswith('postgres://'):
-                database_url = database_url.replace('postgres://', 'postgresql://', 1)
-            print("Using Render PostgreSQL (expires Nov 16)")
-            return database_url
-    
+        
     # Fallback to SQLite
     print("Using SQLite (data may not persist)")
     instance_path = os.path.join(os.getcwd(), 'instance')
