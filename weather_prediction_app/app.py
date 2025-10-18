@@ -1841,51 +1841,28 @@ def generate_daily_predictions():
         }), 500
 
 
-@app.route('/test-daily-predictions')
-def test_daily_predictions():
-    """Test route to manually trigger daily predictions"""
+@app.route('/trigger-daily-predictions')
+def trigger_daily_predictions():
+    """Simple route for UptimeRobot to trigger daily predictions"""
     try:
-        # Test with just one city to avoid API limits
-        test_city = "Dubai'"
-        
-        print(f"Testing daily predictions for {test_city}...")
-        
-        # Train model
-        training_result = predictor.train_model(test_city)
-        if 'error' in training_result:
-            return jsonify({"error": f"Training failed: {training_result['error']}"})
-        
-        # Generate predictions
-        prediction_result = predictor.predict_weather(days=3)  # Just 3 days for testing
-        if 'error' in prediction_result:
-            return jsonify({"error": f"Prediction failed: {prediction_result['error']}"})
-        
-        # Save to database
-        model_metrics = {}
-        model_name = "Unknown"
-        
-        if hasattr(predictor, 'results') and predictor.best_model_name:
-            best_model_result = predictor.results[predictor.best_model_name]
-            model_metrics = best_model_result.get('detailed_metrics', {})
-            model_name = predictor.best_model_name
-        
-        save_success = save_predictions_to_db(
-            test_city,
-            prediction_result['predictions'],
-            model_name,
-            model_metrics
-        )
-        
+        # Just call the existing route internally
+        with app.test_client() as client:
+            response = client.get('/generate-daily-predictions')
+            
         return jsonify({
-            "success": True,
-            "message": f"Test completed for {test_city}",
-            "model_used": model_name,
-            "predictions_generated": len(prediction_result['predictions']),
-            "save_success": save_success
+            'success': response.status_code == 200,
+            'status_code': response.status_code,
+            'message': 'Daily predictions triggered',
+            'timestamp': datetime.now().isoformat()
         })
         
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 
 
 if __name__ == '__main__':
