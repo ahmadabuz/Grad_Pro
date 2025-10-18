@@ -1846,7 +1846,7 @@ def test_daily_predictions():
     """Test route to manually trigger daily predictions"""
     try:
         # Test with just one city to avoid API limits
-        test_city = "Al Jahra'"
+        test_city = "Dubai'"
         
         print(f"Testing daily predictions for {test_city}...")
         
