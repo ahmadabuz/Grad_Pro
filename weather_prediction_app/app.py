@@ -1750,7 +1750,7 @@ def generate_daily_predictions():
     """Generate predictions for multiple cities automatically , for cron jobs"""
     try:
         # List of cities you want daily predictions for
-        cities = ["Amman", "Damascus", "Berlin", "Al Jahra\'", "london","new york","riyadh","Hawalli"]
+        cities = ["Amman"]
         
         results = []
         
@@ -1843,7 +1843,7 @@ def generate_daily_predictions():
 
 @app.route('/trigger-daily-predictions')
 def trigger_daily_predictions():
-    """Simple route for UptimeRobot to trigger daily predictions"""
+    """route for UptimeRobot to trigger daily predictions"""
     try:
         # Just call the existing route internally
         with app.test_client() as client:
