@@ -33,14 +33,14 @@ app = Flask(__name__)
 # POSTGRESQL DATABASE CONFIGURATION - THIS WILL PERSIST!
 def get_database_uri():
     if 'RENDER' in os.environ:
-        # Use Render's PostgreSQL - THIS PERSISTS BETWEEN DEPLOYS!
+        # use Render's PostgreSQL - THIS PERSISTS BETWEEN DEPLOYS
         database_url = os.environ.get('DATABASE_URL')
         if database_url and database_url.startswith('postgres://'):
             database_url = database_url.replace('postgres://', 'postgresql://', 1)
         print(f"Using PostgreSQL database: {database_url}")
         return database_url
     else:
-        # Local SQLite for development
+        # fallback to sqlit (not efficient , as it will lose all new data if you deployed after making new commmit )
         return "sqlite:///weather_predictions.db"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
@@ -1745,9 +1745,152 @@ def fix_today_predictions():
 # Start keep-alive system when app loads
 keep_alive_manager.start_keep_alive()
 
+@app.route('/generate-daily-predictions')
+def generate_daily_predictions():
+    """Generate predictions for multiple cities automatically , for cron jobs"""
+    try:
+        # List of cities you want daily predictions for
+        cities = ["Amman", "Damascus", "Berlin", "Al Jahra\'", "london","new york","riyadh","Hawalli"]
+        
+        results = []
+        
+        for city in cities:
+            try:
+                print(f"Generating predictions for {city}...")
+                
+                # Train model for this city
+                training_result = predictor.train_model(city)
+                if 'error' in training_result:
+                    results.append({
+                        "city": city,
+                        "status": "error", 
+                        "message": f"Training failed: {training_result['error']}"
+                    })
+                    print(f"Training failed for {city}: {training_result['error']}")
+                    continue
+                
+                # Generate predictions
+                prediction_result = predictor.predict_weather(days=7)
+                if 'error' in prediction_result:
+                    results.append({
+                        "city": city,
+                        "status": "error",
+                        "message": f"Prediction failed: {prediction_result['error']}"
+                    })
+                    print(f"Prediction failed for {city}: {prediction_result['error']}")
+                    continue
+                
+                # Get model metrics
+                model_metrics = {}
+                model_name = "Unknown"
+                
+                if hasattr(predictor, 'results') and predictor.best_model_name:
+                    best_model_result = predictor.results[predictor.best_model_name]
+                    model_metrics = best_model_result.get('detailed_metrics', {})
+                    model_name = predictor.best_model_name
+                
+                # Save to database
+                save_success = save_predictions_to_db(
+                    city,
+                    prediction_result['predictions'],
+                    model_name,
+                    model_metrics
+                )
+                
+                if save_success:
+                    results.append({
+                        "city": city,
+                        "status": "success",
+                        "message": f"Generated {len(prediction_result['predictions'])} predictions using {model_name}",
+                        "model_used": model_name,
+                        "predictions_generated": len(prediction_result['predictions'])
+                    })
+                    print(f"Successfully generated and saved predictions for {city} using {model_name}")
+                else:
+                    results.append({
+                        "city": city,
+                        "status": "error",
+                        "message": "Failed to save predictions to database"
+                    })
+                    print(f"Database save failed for {city}")
+                    
+            except Exception as e:
+                results.append({
+                    "city": city,
+                    "status": "error",
+                    "message": f"Unexpected error: {str(e)}"
+                })
+                print(f"Unexpected error for {city}: {e}")
+        
+        # Clean up old predictions
+        cleanup_old_predictions()
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "status": "completed",
+            "total_cities_processed": len(cities),
+            "successful": len([r for r in results if r['status'] == 'success']),
+            "failed": len([r for r in results if r['status'] == 'error']),
+            "results": results
+        }
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": f"Global error: {str(e)}"
+        }), 500
+
+
+@app.route('/test-daily-predictions')
+def test_daily_predictions():
+    """Test route to manually trigger daily predictions"""
+    try:
+        # Test with just one city to avoid API limits
+        test_city = "Al Jahra'"
+        
+        print(f"Testing daily predictions for {test_city}...")
+        
+        # Train model
+        training_result = predictor.train_model(test_city)
+        if 'error' in training_result:
+            return jsonify({"error": f"Training failed: {training_result['error']}"})
+        
+        # Generate predictions
+        prediction_result = predictor.predict_weather(days=3)  # Just 3 days for testing
+        if 'error' in prediction_result:
+            return jsonify({"error": f"Prediction failed: {prediction_result['error']}"})
+        
+        # Save to database
+        model_metrics = {}
+        model_name = "Unknown"
+        
+        if hasattr(predictor, 'results') and predictor.best_model_name:
+            best_model_result = predictor.results[predictor.best_model_name]
+            model_metrics = best_model_result.get('detailed_metrics', {})
+            model_name = predictor.best_model_name
+        
+        save_success = save_predictions_to_db(
+            test_city,
+            prediction_result['predictions'],
+            model_name,
+            model_metrics
+        )
+        
+        return jsonify({
+            "success": True,
+            "message": f"Test completed for {test_city}",
+            "model_used": model_name,
+            "predictions_generated": len(prediction_result['predictions']),
+            "save_success": save_success
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        print("✅ Database tables created/verified")
-        print(f"✅ Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        print("Database tables created/verified")
+        print(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI']}")
     app.run(debug=True)
