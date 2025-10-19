@@ -2345,9 +2345,13 @@
     }
 
     document.getElementById("predictBtn").addEventListener("click", async () => {
+      const predictBtn = document.getElementById("predictBtn");
       const cityInput = document.getElementById("city");
       const city = cityInput.value.trim();
-
+      if (predictBtn.disabled) {
+         return;
+      }
+ 
       if(!city){
         showError("Please enter a city name before generating predictions.");
         cityInput.focus();
@@ -2367,6 +2371,9 @@
       document.getElementById('historical-results').style.display = 'none';
       document.getElementById('advice-results').style.display = 'none';
       loadingIndicator.style.display = "block";
+      // Disable the button to prevent multiple clicks
+      predictBtn.disabled = true;
+      predictBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Predictions...';
 
       try {
         const res = await fetch("/predict", {
@@ -2516,6 +2523,11 @@
       } catch(err){
         loadingIndicator.style.display = "none";
         showError("Request failed: " + err.message);
+      } finally {
+        // Re-enable the button regardless of success or failure    
+        predictBtn.disabled = false;
+        predictBtn.innerHTML = '<i class="fas fa-cloud-sun"></i> Generate Weather Prediction';
+
       }
     });
 
