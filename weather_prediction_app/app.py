@@ -27,6 +27,9 @@ import matplotlib
 import threading
 from pathlib import Path
 import shutil
+import csv
+from io import StringIO
+from flask import make_response
 
 app = Flask(__name__)
 
@@ -1410,10 +1413,6 @@ def get_historical_performance(city):
         })
 
 
-import csv
-from io import StringIO
-from flask import make_response
-
 
 @app.route('/download-historical-data/<city>', methods=['GET'])
 def download_historical_data(city):
@@ -1899,7 +1898,7 @@ def generate_daily_predictions():
 
 
 
-
+'''
 @app.route('/migrate-database', methods=['GET', 'POST'])
 def migrate_database():
     """Add model_comparison column to existing database"""
@@ -1932,8 +1931,10 @@ def migrate_database():
             
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+'''
 
 
+'''
 @app.route('/fix-database', methods=['GET', 'POST'])
 def fix_database():
     """Fix PostgreSQL database schema for deployed version"""
@@ -2010,7 +2011,7 @@ def fix_database():
             </body>
         </html>
         """
-
+'''
 
 
 
