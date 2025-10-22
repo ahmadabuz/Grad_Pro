@@ -1933,6 +1933,89 @@ def migrate_database():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+
+@app.route('/fix-database', methods=['GET', 'POST'])
+def fix_database():
+    """Fix PostgreSQL database schema for deployed version"""
+    try:
+        with app.app_context():
+            from sqlalchemy import text
+            
+            # Check if we're using PostgreSQL
+            if 'postgresql' in app.config["SQLALCHEMY_DATABASE_URI"]:
+                try:
+                    # Check if model_comparison column exists
+                    check_query = text("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name='model_performance' AND column_name='model_comparison'
+                    """)
+                    
+                    result = db.session.execute(check_query).fetchone()
+                    
+                    if not result:
+                        # Add the column to PostgreSQL
+                        alter_query = text("ALTER TABLE model_performance ADD COLUMN model_comparison JSONB")
+                        db.session.execute(alter_query)
+                        
+                        # Set default empty JSON for existing records
+                        update_query = text("UPDATE model_performance SET model_comparison = '{}'::jsonb")
+                        db.session.execute(update_query)
+                        
+                        db.session.commit()
+                        message = "Successfully added model_comparison column to PostgreSQL database!"
+                    else:
+                        message = "model_comparison column already exists in PostgreSQL database!"
+                        
+                except Exception as e:
+                    db.session.rollback()
+                    message = f"Error: {str(e)}"
+                    
+            else:
+                message = "Not a PostgreSQL database - no migration needed"
+            
+            return f"""
+            <html>
+                <head>
+                    <title>Database Fix</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; padding: 40px; background: linear-gradient(to bottom, #1a2980, #26d0ce); color: white; }}
+                        .container {{ max-width: 800px; margin: 0 auto; background: rgba(255,255,255,0.95); padding: 30px; border-radius: 15px; color: #333; }}
+                        .success {{ color: #28a745; font-weight: bold; }}
+                        .error {{ color: #dc3545; font-weight: bold; }}
+                        .info {{ color: #17a2b8; }}
+                        a {{ color: #667eea; text-decoration: none; font-weight: bold; }}
+                        a:hover {{ text-decoration: underline; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>Database Migration</h1>
+                        <p>{message}</p>
+                        <p><a href="/">Return to SkySense</a></p>
+                    </div>
+                </body>
+            </html>
+            """
+            
+    except Exception as e:
+        return f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; padding: 40px; background: linear-gradient(to bottom, #1a2980, #26d0ce); color: white;">
+                <div style="max-width: 800px; margin: 0 auto; background: rgba(255,255,255,0.95); padding: 30px; border-radius: 15px; color: #333;">
+                    <h1>Database Migration Error</h1>
+                    <p style="color: #dc3545; font-weight: bold;">Error: {str(e)}</p>
+                    <p><a href="/" style="color: #667eea; text-decoration: none; font-weight: bold;">Return to SkySense</a></p>
+                </div>
+            </body>
+        </html>
+        """
+
+
+
+
+
+
 @app.route('/trigger-daily-predictions')
 def trigger_daily_predictions():
     """route for UptimeRobot to trigger daily predictions"""
