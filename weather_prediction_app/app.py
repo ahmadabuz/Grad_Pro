@@ -1,4 +1,3 @@
-#1
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -77,6 +76,8 @@ class ModelPerformance(db.Model):
     mae = db.Column(db.Float, nullable=False)
     rmse = db.Column(db.Float, nullable=False)
     detailed_metrics = db.Column(db.JSON, nullable=False)
+    model_comparison = db.Column(db.JSON, nullable=True)  # Store all model results
+    
 
 API_KEY = "387452ec05eb4b38b74113541251610"
 BASE_URL = "https://api.weatherapi.com/v1"
@@ -697,7 +698,7 @@ def cleanup_old_predictions():
     except Exception as e:
         print(f"Error cleaning up old predictions: {e}")
 
-def save_predictions_to_db(city, predictions, model_name, model_metrics):
+def save_predictions_to_db(city, predictions, model_name, model_metrics, model_comparison=None):
     """Save predictions to the database, preserving historical data"""
     try:
         generation_time = datetime.now()
@@ -710,6 +711,7 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
             Prediction.is_current == True
         ).update({'is_current': False}, synchronize_session=False)
 
+        # Get the maximum version number for this city to increment it
         max_version = db.session.query(db.func.max(Prediction.version)).filter_by(
             city=city
         ).scalar() or 0
@@ -717,11 +719,13 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
         new_version = max_version + 1
 
         for prediction in predictions:
+            # Convert string date to datetime object if needed
             if isinstance(prediction['date'], str):
                 prediction_date = datetime.strptime(prediction['date'], '%Y-%m-%d').date()
             else:
                 prediction_date = prediction['date'].date()
 
+            # Only save predictions for today and future dates
             if prediction_date >= today:
                 new_prediction = Prediction(
                     city=city,
@@ -739,32 +743,33 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
                 )
                 db.session.add(new_prediction)
 
+        # Calculate overall R² score from detailed metrics
         overall_r2 = 0
-        if model_metrics and isinstance(model_metrics, dict):
-            r2_scores = []
-            for param_metrics in model_metrics.values():
-                if isinstance(param_metrics, dict) and 'r2' in param_metrics:
-                    r2_scores.append(param_metrics['r2'])
-            if r2_scores:
-                overall_r2 = sum(r2_scores) / len(r2_scores)
-
         overall_mae = 0
         overall_rmse = 0
+        
         if model_metrics and isinstance(model_metrics, dict):
+            # Extract R² scores from each parameter and average them
+            r2_scores = []
             mae_scores = []
             rmse_scores = []
             for param_metrics in model_metrics.values():
                 if isinstance(param_metrics, dict):
+                    if 'r2' in param_metrics:
+                        r2_scores.append(param_metrics['r2'])
                     if 'mae' in param_metrics:
                         mae_scores.append(param_metrics['mae'])
                     if 'rmse' in param_metrics:
                         rmse_scores.append(param_metrics['rmse'])
 
+            if r2_scores:
+                overall_r2 = sum(r2_scores) / len(r2_scores)
             if mae_scores:
                 overall_mae = sum(mae_scores) / len(mae_scores)
             if rmse_scores:
                 overall_rmse = sum(rmse_scores) / len(rmse_scores)
 
+        # Always save performance metrics with model comparison data
         performance = ModelPerformance(
             city=city,
             timestamp=generation_time,
@@ -772,12 +777,12 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics):
             r2_score=round(overall_r2, 4),
             mae=round(overall_mae, 4),
             rmse=round(overall_rmse, 4),
-            detailed_metrics=model_metrics
+            detailed_metrics=model_metrics,
+            model_comparison=model_comparison  # Store complete model comparison
         )
         db.session.add(performance)
 
         db.session.commit()
-        
         return True
     except Exception as e:
         db.session.rollback()
@@ -929,8 +934,9 @@ def predict():
             metrics = {}
             model_name = "Unknown"
             r2_score = 0
+            model_results = {}
 
-            # Try to get performance metrics
+            # Try to get performance metrics with model comparison
             latest_performance = ModelPerformance.query.filter_by(
                 city=city
             ).order_by(ModelPerformance.timestamp.desc()).first()
@@ -940,6 +946,33 @@ def predict():
                 metrics = latest_performance.detailed_metrics or {}
                 model_name = latest_performance.model_name or "Unknown"
                 r2_score = latest_performance.r2_score or 0
+                
+                # Get model comparison data if available
+                if latest_performance.model_comparison:
+                    model_results = latest_performance.model_comparison
+                else:
+                    # Fallback: create basic model comparison from available data
+                    if metrics:
+                        # Calculate average metrics for the best model
+                        r2_scores = []
+                        mae_scores = []
+                        rmse_scores = []
+                        
+                        for param_metrics in metrics.values():
+                            if isinstance(param_metrics, dict):
+                                if 'r2' in param_metrics:
+                                    r2_scores.append(param_metrics['r2'])
+                                if 'mae' in param_metrics:
+                                    mae_scores.append(param_metrics['mae'])
+                                if 'rmse' in param_metrics:
+                                    rmse_scores.append(param_metrics['rmse'])
+                        
+                        if r2_scores:
+                            model_results[model_name] = {
+                                'r2': sum(r2_scores) / len(r2_scores),
+                                'mae': sum(mae_scores) / len(mae_scores) if mae_scores else 0,
+                                'rmse': sum(rmse_scores) / len(rmse_scores) if rmse_scores else 0
+                            }
 
                 # If R² is 0 but we have detailed metrics, calculate it
                 if r2_score == 0 and metrics:
@@ -961,6 +994,7 @@ def predict():
                 'predictions': db_predictions,
                 'chart': chart_url,
                 'metrics': metrics,
+                'model_results': model_results,  # Include model comparison data
                 'source': 'database'
             })
 
@@ -982,24 +1016,33 @@ def predict():
 
         chart_url = predictor.generate_chart(prediction_result['predictions'])
 
-        # Safely get model metrics
+        # Safely get model metrics and results
         model_metrics = {}
         overall_r2 = 0
+        model_results = {}
 
-        if (hasattr(predictor, 'results') and predictor.best_model_name and
-                predictor.best_model_name in predictor.results):
+        if (hasattr(predictor, 'results') and predictor.results):
+            # Extract all model results for comparison
+            for model_name, result in predictor.results.items():
+                model_results[model_name] = {
+                    'r2': round(result.get('r2', 0), 4),
+                    'mae': round(result.get('mae', 0), 4),
+                    'rmse': round(result.get('rmse', 0), 4)
+                }
 
-            best_model_result = predictor.results[predictor.best_model_name]
-            model_metrics = best_model_result.get('detailed_metrics', {})
+            # Get best model metrics
+            if predictor.best_model_name and predictor.best_model_name in predictor.results:
+                best_model_result = predictor.results[predictor.best_model_name]
+                model_metrics = best_model_result.get('detailed_metrics', {})
 
-            # Calculate overall R² score
-            if model_metrics:
-                r2_scores = []
-                for param_metrics in model_metrics.values():
-                    if isinstance(param_metrics, dict) and 'r2' in param_metrics:
-                        r2_scores.append(param_metrics['r2'])
-                if r2_scores:
-                    overall_r2 = sum(r2_scores) / len(r2_scores)
+                # Calculate overall R² score
+                if model_metrics:
+                    r2_scores = []
+                    for param_metrics in model_metrics.values():
+                        if isinstance(param_metrics, dict) and 'r2' in param_metrics:
+                            r2_scores.append(param_metrics['r2'])
+                    if r2_scores:
+                        overall_r2 = sum(r2_scores) / len(r2_scores)
 
         # Build metrics dictionary with proper structure
         metrics_dict = {}
@@ -1025,12 +1068,13 @@ def predict():
                 'wind_kph': {'r2': 0, 'mae': 0, 'rmse': 0}
             }
 
-        # Save to database
+        # Save to database with model comparison data
         save_success = save_predictions_to_db(
             city,
             prediction_result['predictions'],
             predictor.best_model_name,
-            metrics_dict
+            metrics_dict,
+            model_results  # Pass model comparison data
         )
 
         if not save_success:
@@ -1045,6 +1089,7 @@ def predict():
             'predictions': prediction_result['predictions'],
             'chart': chart_url,
             'metrics': metrics_dict,
+            'model_results': model_results,  # Include model comparison data
             'source': 'new_training'
         }
 
@@ -1058,7 +1103,6 @@ def predict():
             'success': False,
             'error': f"An unexpected error occurred: {str(e)}"
         })
-
 
 @app.route('/cache/clear', methods=['POST'])
 def clear_cache():
@@ -1841,6 +1885,53 @@ def generate_daily_predictions():
             "message": f"Global error: {str(e)}"
         }), 500
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@app.route('/migrate-database', methods=['GET', 'POST'])
+def migrate_database():
+    """Add model_comparison column to existing database"""
+    try:
+        with app.app_context():
+            # Check if model_comparison column exists
+            db_path = os.path.join('instance', 'weather_predictions.db')
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("PRAGMA table_info(model_performance)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'model_comparison' not in columns:
+                cursor.execute('ALTER TABLE model_performance ADD COLUMN model_comparison JSON')
+                print("✓ Added model_comparison column to model_performance table")
+                
+                # Update existing records with empty model_comparison
+                cursor.execute('UPDATE model_performance SET model_comparison = ?', (json.dumps({}),))
+                print("✓ Updated existing records with empty model_comparison")
+                
+                message = "Database migration completed successfully!"
+            else:
+                message = "Database already has the model_comparison column."
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': message})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/trigger-daily-predictions')
 def trigger_daily_predictions():
