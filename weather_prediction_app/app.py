@@ -2013,7 +2013,51 @@ def fix_database():
         """
 '''
 
-
+@app.route('/current-weather/<city>', methods=['GET'])
+def get_current_weather(city):
+    """Get current weather data for real-time dashboard"""
+    try:
+        url = f"{BASE_URL}/current.json"
+        params = {
+            "key": API_KEY,
+            "q": city
+        }
+        
+        response = requests.get(url, params=params, timeout=30)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': 'Unable to fetch current weather data'
+            })
+        
+        data = response.json()
+        current = data['current']
+        
+        current_weather = {
+            'temp_c': current['temp_c'],
+            'humidity': current['humidity'],
+            'wind_kph': current['wind_kph'],
+            'condition': current['condition']['text'],
+            'feelslike_c': current['feelslike_c'],
+            'pressure_mb': current['pressure_mb'],
+            'precip_mm': current['precip_mm'],
+            'cloud': current['cloud'],
+            'vis_km': current['vis_km'],
+            'uv': current['uv']
+        }
+        
+        return jsonify({
+            'success': True,
+            'city': city,
+            'current_weather': current_weather
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 
 
