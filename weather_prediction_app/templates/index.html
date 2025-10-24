@@ -730,6 +730,93 @@
     border: 1px solid #d6d8db;
   }
 
+  /* Performance Badge Styles */
+  .performance-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 8px;
+    border: 1px solid;
+  }
+
+  .badge-outstanding {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    color: #155724;
+    border-color: #155724;
+  }
+
+  .badge-excellent {
+    background: linear-gradient(135deg, #c3e6cb, #b1dfbb);
+    color: #0f5132;
+    border-color: #0f5132;
+  }
+
+  .badge-very-good {
+    background: linear-gradient(135deg, #d1ecf1, #bee5eb);
+    color: #0c5460;
+    border-color: #0c5460;
+  }
+
+  .badge-good {
+    background: linear-gradient(135deg, #d1ecf1, #b6d7e2);
+    color: #125269;
+    border-color: #125269;
+  }
+
+  .badge-satisfactory {
+    background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+    color: #856404;
+    border-color: #856404;
+  }
+
+  .badge-fair {
+    background: linear-gradient(135deg, #ffeaa7, #ffdf7e);
+    color: #8a6d3b;
+    border-color: #8a6d3b;
+  }
+
+  .badge-poor {
+    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    color: #721c24;
+    border-color: #721c24;
+  }
+
+  .badge-weak {
+    background: linear-gradient(135deg, #f5c6cb, #f1b0b7);
+    color: #491217;
+    border-color: #491217;
+  }
+
+  .badge-very-weak {
+    background: linear-gradient(135deg, #e2e3e5, #d6d8db);
+    color: #383d41;
+    border-color: #383d41;
+  }
+
+  /* Performance Explanation Styles */
+  .performance-explanation {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+  }
+
+  .performance-explanation h5 {
+    margin: 0 0 10px 0;
+    color: #495057;
+    font-size: 0.9rem;
+  }
+
+  .performance-scale {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    font-size: 0.8rem;
+  }
+
   /* Responsive design */
   @media (max-width: 768px) {
     .tab-navigation {
@@ -778,6 +865,10 @@
     th, td {
       padding: 10px;
     }
+
+    .performance-scale {
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
   }
 
   @media (max-width: 480px) {
@@ -800,6 +891,10 @@
 
     th, td {
       padding: 8px 6px;
+    }
+
+    .performance-scale {
+      grid-template-columns: 1fr;
     }
   }
 
@@ -882,6 +977,86 @@
     opacity: 1;
     transform: translateY(0);
   }
+
+  /* Real-time Weather Dashboard Styles */
+.real-time-dashboard {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 25px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.real-time-dashboard h3 {
+    color: #667eea;
+    margin-bottom: 20px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.real-time-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.real-time-card {
+    background: #f8f9ff;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    border-left: 4px solid #667eea;
+    transition: transform 0.3s ease;
+}
+
+.real-time-card:hover {
+    transform: translateY(-3px);
+}
+
+.real-time-icon {
+    font-size: 2rem;
+    color: #667eea;
+    margin-bottom: 10px;
+}
+
+.real-time-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 10px 0;
+}
+
+.real-time-label {
+    color: #718096;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .real-time-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .real-time-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.real-time-footer {
+    text-align: center;
+    margin-top: 15px;
+    color: #718096;
+    font-size: 0.8rem;
+}
+
+.real-time-footer i {
+    margin-right: 5px;
+}
   </style>
 </head>
 <body>
@@ -1094,6 +1269,25 @@
               </thead>
               <tbody></tbody>
             </table>
+            
+            <!-- Performance Explanation -->
+            <div class="performance-explanation">
+              <h5><i class="fas fa-chart-line"></i> Performance Scale Explanation</h5>
+              <div class="performance-scale">
+                <div><span class="performance-badge badge-outstanding">(Outstanding)</span> R² > 0.9</div>
+                <div><span class="performance-badge badge-excellent">(Excellent)</span> R² > 0.8</div>
+                <div><span class="performance-badge badge-very-good">(Very Good)</span> R² > 0.7</div>
+                <div><span class="performance-badge badge-good">(Good)</span> R² > 0.6</div>
+                <div><span class="performance-badge badge-satisfactory">(Satisfactory)</span> R² > 0.5</div>
+                <div><span class="performance-badge badge-fair">(Fair)</span> R² > 0.4</div>
+                <div><span class="performance-badge badge-poor">(Poor)</span> R² > 0.3</div>
+                <div><span class="performance-badge badge-weak">(Weak)</span> R² > 0.2</div>
+                <div><span class="performance-badge badge-very-weak">(Very Weak)</span> R² ≤ 0.2</div>
+              </div>
+              <p style="margin: 10px 0 0 0; font-size: 0.75rem; color: #6c757d;">
+                <strong>R² Score:</strong> Measures how well the model explains weather pattern variations (1.0 = perfect, 0 = no explanatory power)
+              </p>
+            </div>
           </div>
 
           <table id="metrics-table">
@@ -1527,6 +1721,155 @@
       return advice;
     }
 
+
+
+    function addRealTimeWeather() {
+    // Real-time weather indicators
+    const realTimeHTML = `
+    <div class="real-time-dashboard">
+        <h3><i class="fas fa-satellite"></i> Real-time Weather Monitoring</h3>
+        <div class="real-time-grid">
+            <div class="real-time-card">
+                <div class="real-time-icon"><i class="fas fa-temperature-high"></i></div>
+                <div class="real-time-value" id="current-temp">--°C</div>
+                <div class="real-time-label">Current Temperature</div>
+            </div>
+            <div class="real-time-card">
+                <div class="real-time-icon"><i class="fas fa-tint"></i></div>
+                <div class="real-time-value" id="current-humidity">--%</div>
+                <div class="real-time-label">Current Humidity</div>
+            </div>
+            <div class="real-time-card">
+                <div class="real-time-icon"><i class="fas fa-wind"></i></div>
+                <div class="real-time-value" id="current-wind">-- km/h</div>
+                <div class="real-time-label">Wind Speed</div>
+            </div>
+            <div class="real-time-card">
+                <div class="real-time-icon"><i class="fas fa-cloud"></i></div>
+                <div class="real-time-value" id="current-condition">--</div>
+                <div class="real-time-label">Current Condition</div>
+            </div>
+        </div>
+        <div class="real-time-footer">
+            <small><i class="fas fa-sync-alt"></i> Updates every 30 seconds</small>
+        </div>
+    </div>
+    `;
+
+    // Add to predictions tab after dashboard cards
+    const dashboardGrid = document.querySelector('.dashboard-grid');
+    dashboardGrid.insertAdjacentHTML('afterend', realTimeHTML);
+}
+
+// Function to update real-time weather data
+async function updateRealTimeWeather(city) {
+    try {
+        const response = await fetch(`/current-weather/${encodeURIComponent(city)}`);
+        const data = await response.json();
+
+        if (data.success && data.current_weather) {
+            const weather = data.current_weather;
+
+            // Update the dashboard elements
+            document.getElementById('current-temp').textContent = `${Math.round(weather.temp_c)}°C`;
+            document.getElementById('current-humidity').textContent = `${weather.humidity}%`;
+            document.getElementById('current-wind').textContent = `${Math.round(weather.wind_kph)} km/h`;
+            document.getElementById('current-condition').textContent = weather.condition;
+
+            // Add color coding based on conditions
+            updateRealTimeColors(weather);
+        } else {
+            console.error('Failed to fetch real-time weather:', data.error);
+            setRealTimePlaceholders();
+        }
+    } catch (error) {
+        console.error('Error fetching real-time weather:', error);
+        setRealTimePlaceholders();
+    }
+}
+
+// Function to update colors based on weather conditions
+function updateRealTimeColors(weather) {
+    const tempElement = document.getElementById('current-temp');
+    const humidityElement = document.getElementById('current-humidity');
+    const windElement = document.getElementById('current-wind');
+
+    // Temperature color coding
+    if (weather.temp_c > 30) {
+        tempElement.style.color = '#e74c3c'; // Hot - red
+    } else if (weather.temp_c > 20) {
+        tempElement.style.color = '#f39c12'; // Warm - orange
+    } else if (weather.temp_c > 10) {
+        tempElement.style.color = '#27ae60'; // Mild - green
+    } else if (weather.temp_c > 0) {
+        tempElement.style.color = '#3498db'; // Cool - blue
+    } else {
+        tempElement.style.color = '#8e44ad'; // Cold - purple
+    }
+
+    // Humidity color coding
+    if (weather.humidity > 80) {
+        humidityElement.style.color = '#3498db'; // High humidity - blue
+    } else if (weather.humidity > 50) {
+        humidityElement.style.color = '#27ae60'; // Moderate - green
+    } else {
+        humidityElement.style.color = '#e67e22'; // Low - orange
+    }
+
+    // Wind speed color coding
+    if (weather.wind_kph > 30) {
+        windElement.style.color = '#e74c3c'; // Strong wind - red
+    } else if (weather.wind_kph > 15) {
+        windElement.style.color = '#f39c12'; // Moderate wind - orange
+    } else {
+        windElement.style.color = '#27ae60'; // Light wind - green
+    }
+}
+
+// Function to set placeholder values
+function setRealTimePlaceholders() {
+    document.getElementById('current-temp').textContent = '--°C';
+    document.getElementById('current-humidity').textContent = '--%';
+    document.getElementById('current-wind').textContent = '-- km/h';
+    document.getElementById('current-condition').textContent = '--';
+
+    // Reset colors
+    const elements = ['current-temp', 'current-humidity', 'current-wind'];
+    elements.forEach(id => {
+        document.getElementById(id).style.color = '#2d3748';
+    });
+}
+
+// Function to start real-time updates
+let realTimeInterval = null;
+
+function startRealTimeUpdates(city) {
+    // Clear existing interval
+    if (realTimeInterval) {
+        clearInterval(realTimeInterval);
+    }
+
+    // Initial update
+    updateRealTimeWeather(city);
+
+    // Set up interval for updates every 30 seconds
+    realTimeInterval = setInterval(() => {
+        updateRealTimeWeather(city);
+    }, 30000); // 30 seconds
+}
+
+// Function to stop real-time updates
+function stopRealTimeUpdates() {
+    if (realTimeInterval) {
+        clearInterval(realTimeInterval);
+        realTimeInterval = null;
+    }
+    setRealTimePlaceholders();
+}
+
+
+
+
     // Helper function to calculate temperature consistency
     function calculateTemperatureConsistency(predictions) {
       if (!predictions || predictions.length < 2) return 0.5;
@@ -1583,67 +1926,110 @@
 
       return Math.min(1, Math.max(0.3, baseConfidence)); // Keep within reasonable bounds
     }
-    // Function to render model comparison table
-function renderModelComparison(modelResults, bestModel) {
-  const comparisonBody = document.querySelector("#model-comparison-table tbody");
-  comparisonBody.innerHTML = "";
 
-  if (!modelResults || Object.keys(modelResults).length === 0) {
-    comparisonBody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align: center; color: #666; padding: 20px;">
-          <i class="fas fa-info-circle"></i> Model comparison data not available for cached predictions.<br>
-          <small>Generate new predictions to see detailed model performance comparison.</small>
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  // Sort models by R² score (descending)
-  const sortedModels = Object.entries(modelResults).sort((a, b) => b[1].r2 - a[1].r2);
-
-  for (const [modelName, result] of sortedModels) {
-    const isSelected = modelName === bestModel;
-    const statusClass = isSelected ? 'status-selected' : 'status-trained';
-    const statusText = isSelected ? '✅ Selected' : 'Trained';
-
-    // Determine performance badge
-    let performanceBadge = '';
-    if (result.r2 > 0.7) {
-      performanceBadge = '<span class="performance-badge badge-high">Excellent</span>';
-    } else if (result.r2 > 0.5) {
-      performanceBadge = '<span class="performance-badge badge-medium">Good</span>';
-    } else if (result.r2 > 0.3) {
-      performanceBadge = '<span class="performance-badge badge-low">Fair</span>';
+    // Enhanced performance badge system
+    function getPerformanceBadge(r2Score) {
+        let badgeClass = '';
+        let badgeText = '';
+        
+        if (r2Score > 0.9) {
+            badgeClass = 'badge-outstanding';
+            badgeText = '(Outstanding)';
+        } else if (r2Score > 0.8) {
+            badgeClass = 'badge-excellent';
+            badgeText = '(Excellent)';
+        } else if (r2Score > 0.7) {
+            badgeClass = 'badge-very-good';
+            badgeText = '(Very Good)';
+        } else if (r2Score > 0.6) {
+            badgeClass = 'badge-good';
+            badgeText = '(Good)';
+        } else if (r2Score > 0.5) {
+            badgeClass = 'badge-satisfactory';
+            badgeText = '(Satisfactory)';
+        } else if (r2Score > 0.4) {
+            badgeClass = 'badge-fair';
+            badgeText = '(Fair)';
+        } else if (r2Score > 0.3) {
+            badgeClass = 'badge-poor';
+            badgeText = '(Poor)';
+        } else if (r2Score > 0.2) {
+            badgeClass = 'badge-weak';
+            badgeText = '(Weak)';
+        } else {
+            badgeClass = 'badge-very-weak';
+            badgeText = '(Very Weak)';
+        }
+        
+        return `<span class="performance-badge ${badgeClass}">${badgeText}</span>`;
     }
 
-    comparisonBody.insertAdjacentHTML("beforeend", `
-      <tr>
-        <td><strong>${modelName}</strong> ${performanceBadge}</td>
-        <td>${result.r2 !== undefined ? result.r2.toFixed(4) : 'N/A'}</td>
-        <td>${result.mae !== undefined ? result.mae.toFixed(4) : 'N/A'}</td>
-        <td>${result.rmse !== undefined ? result.rmse.toFixed(4) : 'N/A'}</td>
-        <td><span class="model-status ${statusClass}">${statusText}</span></td>
-      </tr>
-    `);
-  }
-}
+    // Function to render model comparison table
+    function renderModelComparison(modelResults, bestModel, source) {
+      const comparisonBody = document.querySelector("#model-comparison-table tbody");
+      comparisonBody.innerHTML = "";
 
+      if (!modelResults || Object.keys(modelResults).length === 0) {
+        comparisonBody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; color: #666; padding: 20px;">
+              <i class="fas fa-info-circle"></i> No detailed model comparison data available.<br>
+              <small>${source === 'database' ?
+                'This is cached data. Generate new predictions to see full model comparison.' :
+                'Generate predictions to see model performance comparison.'}</small>
+            </td>
+          </tr>
+        `;
+        return;
+      }
 
+      // If we only have one model (cached data with fallback)
+      if (Object.keys(modelResults).length === 1) {
+        const [modelName, result] = Object.entries(modelResults)[0];
+        const performanceBadge = getPerformanceBadge(result.r2 || 0);
+        
+        comparisonBody.innerHTML = `
+          <tr>
+            <td><strong>${modelName}</strong> ${performanceBadge} <span class="model-status status-selected">✅ Selected</span></td>
+            <td>${result.r2 !== undefined ? result.r2.toFixed(4) : 'N/A'}</td>
+            <td>${result.mae !== undefined ? result.mae.toFixed(4) : 'N/A'}</td>
+            <td>${result.rmse !== undefined ? result.rmse.toFixed(4) : 'N/A'}</td>
+            <td><span class="model-status status-selected">Selected Model</span></td>
+          </tr>
+          <tr>
+            <td colspan="5" style="text-align: center; color: #666; font-size: 0.9rem; padding: 10px;">
+              <i class="fas fa-info-circle"></i> Limited comparison data available.<br>
+              <small>Generate new predictions to see full model performance comparison across all algorithms.</small>
+            </td>
+          </tr>
+        `;
+        return;
+      }
 
+      // Sort models by R² score (descending) - full comparison available
+      const sortedModels = Object.entries(modelResults).sort((a, b) => b[1].r2 - a[1].r2);
 
+      for (const [modelName, result] of sortedModels) {
+        const isSelected = modelName === bestModel;
+        const statusClass = isSelected ? 'status-selected' : 'status-trained';
+        const statusText = isSelected ? '✅ Selected' : 'Trained';
+        
+        const performanceBadge = getPerformanceBadge(result.r2 || 0);
 
-
-
-
-
-
-
-
-
-
-
+        comparisonBody.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td>
+                <strong>${modelName}</strong> 
+                ${performanceBadge}
+            </td>
+            <td>${result.r2 !== undefined ? result.r2.toFixed(4) : 'N/A'}</td>
+            <td>${result.mae !== undefined ? result.mae.toFixed(4) : 'N/A'}</td>
+            <td>${result.rmse !== undefined ? result.rmse.toFixed(4) : 'N/A'}</td>
+            <td><span class="model-status ${statusClass}">${statusText}</span></td>
+          </tr>
+        `);
+      }
+    }
 
     // Function to render advice with confidence indicators
     function renderAdvice(advice, cityName) {
@@ -2460,81 +2846,6 @@ function renderModelComparison(modelResults, bestModel) {
       }
     }
 
-// Function to render model comparison table
-function renderModelComparison(modelResults, bestModel, source) {
-  const comparisonBody = document.querySelector("#model-comparison-table tbody");
-  comparisonBody.innerHTML = "";
-
-  if (!modelResults || Object.keys(modelResults).length === 0) {
-    comparisonBody.innerHTML = `
-      <tr>
-        <td colspan="5" style="text-align: center; color: #666; padding: 20px;">
-          <i class="fas fa-info-circle"></i> No detailed model comparison data available.<br>
-          <small>${source === 'database' ?
-            'This is cached data. Generate new predictions to see full model comparison.' :
-            'Generate predictions to see model performance comparison.'}</small>
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  // If we only have one model (cached data with fallback)
-  if (Object.keys(modelResults).length === 1) {
-    const [modelName, result] = Object.entries(modelResults)[0];
-    comparisonBody.innerHTML = `
-      <tr>
-        <td><strong>${modelName}</strong> <span class="model-status status-selected">✅ Selected</span></td>
-        <td>${result.r2 !== undefined ? result.r2.toFixed(4) : 'N/A'}</td>
-        <td>${result.mae !== undefined ? result.mae.toFixed(4) : 'N/A'}</td>
-        <td>${result.rmse !== undefined ? result.rmse.toFixed(4) : 'N/A'}</td>
-        <td><span class="model-status status-selected">Selected Model</span></td>
-      </tr>
-      <tr>
-        <td colspan="5" style="text-align: center; color: #666; font-size: 0.9rem; padding: 10px;">
-          <i class="fas fa-info-circle"></i> Limited comparison data available.<br>
-          <small>Generate new predictions to see full model performance comparison across all algorithms.</small>
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  // Sort models by R² score (descending) - full comparison available
-  const sortedModels = Object.entries(modelResults).sort((a, b) => b[1].r2 - a[1].r2);
-
-  for (const [modelName, result] of sortedModels) {
-    const isSelected = modelName === bestModel;
-    const statusClass = isSelected ? 'status-selected' : 'status-trained';
-    const statusText = isSelected ? '✅ Selected' : 'Trained';
-
-    // Determine performance badge
-    let performanceBadge = '';
-    if (result.r2 > 0.7) {
-      performanceBadge = '<span class="performance-badge badge-high">Excellent</span>';
-    } else if (result.r2 > 0.5) {
-      performanceBadge = '<span class="performance-badge badge-medium">Good</span>';
-    } else if (result.r2 > 0.3) {
-      performanceBadge = '<span class="performance-badge badge-low">Fair</span>';
-    }
-
-    comparisonBody.insertAdjacentHTML("beforeend", `
-      <tr>
-        <td><strong>${modelName}</strong> ${performanceBadge}</td>
-        <td>${result.r2 !== undefined ? result.r2.toFixed(4) : 'N/A'}</td>
-        <td>${result.mae !== undefined ? result.mae.toFixed(4) : 'N/A'}</td>
-        <td>${result.rmse !== undefined ? result.rmse.toFixed(4) : 'N/A'}</td>
-        <td><span class="model-status ${statusClass}">${statusText}</span></td>
-      </tr>
-    `);
-  }
-}
-
-
-
-
-
-
     document.getElementById("predictBtn").addEventListener("click", async () => {
       const predictBtn = document.getElementById("predictBtn");
       const cityInput = document.getElementById("city");
@@ -2583,7 +2894,8 @@ function renderModelComparison(modelResults, bestModel, source) {
 
         // Show tab navigation
         tabNavigation.style.display = 'flex';
-
+        // Start real-time weather updates for this city
+        startRealTimeUpdates(city);
         // Update dashboard cards
         const avgTemp = data.predictions.reduce((sum, day) => sum + parseFloat(day.avg_temp), 0) / data.predictions.length;
         const avgHumidity = data.predictions.reduce((sum, day) => sum + parseFloat(day.humidity), 0) / data.predictions.length;
@@ -2769,6 +3081,9 @@ function renderModelComparison(modelResults, bestModel, source) {
       setupTabs();
       // Initialize download buttons
       setupDownloadButtons();
+      // Add real-time weather dashboard
+      addRealTimeWeather();
+      
     });
   </script>
 </body>
