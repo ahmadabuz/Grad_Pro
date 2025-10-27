@@ -817,6 +817,100 @@
     font-size: 0.8rem;
   }
 
+  /* Trends Tab Styles */
+  .trends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 25px;
+    margin-bottom: 30px;
+  }
+
+  .trend-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    text-align: center;
+    transition: transform 0.3s ease;
+  }
+
+  .trend-card:hover {
+    transform: translateY(-5px);
+  }
+
+  .trend-card h4 {
+    color: #667eea;
+    margin-bottom: 15px;
+    font-family: 'Montserrat', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .trend-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 15px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .trend-detail {
+    color: #718096;
+    font-size: 0.9rem;
+    margin-top: 5px;
+  }
+
+  .trend-icon {
+    font-size: 2rem;
+    color: #667eea;
+  }
+
+  .trend-high {
+    color: #e74c3c;
+  }
+
+  .trend-low {
+    color: #3498db;
+  }
+
+  .trend-average {
+    color: #2ecc71;
+  }
+
+  .trend-range {
+    color: #f39c12;
+  }
+
+  .trend-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 20px;
+  }
+
+  .stat-item {
+    background: #f8f9ff;
+    padding: 15px;
+    border-radius: 10px;
+    text-align: center;
+  }
+
+  .stat-item .label {
+    font-size: 0.8rem;
+    color: #718096;
+    margin-bottom: 5px;
+  }
+
+  .stat-item .value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2d3748;
+  }
+
   /* Responsive design */
   @media (max-width: 768px) {
     .tab-navigation {
@@ -850,6 +944,10 @@
       grid-template-columns: 1fr;
     }
 
+    .trends-grid {
+      grid-template-columns: 1fr;
+    }
+
     .advice-categories {
       grid-template-columns: 1fr;
     }
@@ -868,6 +966,10 @@
 
     .performance-scale {
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .trend-stats {
+      grid-template-columns: 1fr;
     }
   }
 
@@ -1057,8 +1159,7 @@
 .real-time-footer i {
     margin-right: 5px;
 }
-    
-    
+
 .footer a {
   color: #2a9d8f; /* Light blue color */
   text-decoration: none;
@@ -1070,11 +1171,10 @@
   color: #ffffff; /* Pure white on hover */
   text-decoration: underline;
 }
-    
-    
-    
-    
-    
+
+
+
+
   </style>
 </head>
 <body>
@@ -1121,6 +1221,9 @@
       <button class="tab-button active" data-tab="predictions">
         <i class="fas fa-chart-line"></i> Predictions
       </button>
+      <button class="tab-button" data-tab="trends">
+        <i class="fas fa-chart-bar"></i> Trends
+      </button>
       <button class="tab-button" data-tab="pattern-recognition">
         <i class="fas fa-brain"></i> Pattern Recognition
       </button>
@@ -1162,6 +1265,8 @@
             <div class="stat-label">Learning Score</div>
           </div>
         </div>
+
+
 
         <!-- Chart Grid -->
         <div class="chart-grid">
@@ -1253,6 +1358,100 @@
       </div>
     </div>
 
+    <!-- Trends Tab -->
+    <div class="tab-content" id="trends-content">
+      <div class="results" id="trends-results">
+        <div class="card">
+          <h3><i class="fas fa-chart-bar"></i> Weather Trends & Extremes for <span id="trends-city-name">--</span></h3>
+          <p style="margin-bottom: 25px; color: #666; line-height: 1.6;">Analysis of temperature extremes, humidity patterns, and wind variations</p>
+
+          <div class="trends-grid">
+            <div class="trend-card">
+              <h4><i class="fas fa-thermometer-full"></i> Highest Temperature</h4>
+              <div class="trend-value trend-high">
+                <span id="highest-temp">--°C</span>
+              </div>
+              <div class="trend-detail" id="highest-temp-date">Date: --</div>
+              <div class="trend-detail" id="highest-temp-condition">Condition: --</div>
+            </div>
+
+            <div class="trend-card">
+              <h4><i class="fas fa-thermometer-empty"></i> Lowest Temperature</h4>
+              <div class="trend-value trend-low">
+                <span id="lowest-temp">--°C</span>
+              </div>
+              <div class="trend-detail" id="lowest-temp-date">Date: --</div>
+              <div class="trend-detail" id="lowest-temp-condition">Condition: --</div>
+            </div>
+
+            <div class="trend-card">
+              <h4><i class="fas fa-temperature-average"></i> Average Temperature</h4>
+              <div class="trend-value trend-average">
+                <span id="average-temp">--°C</span>
+              </div>
+              <div class="trend-detail">7-day forecast period</div>
+              <div class="trend-detail" id="temp-range">Range: --°C</div>
+            </div>
+
+            <div class="trend-card">
+              <h4><i class="fas fa-wind"></i> Wind Analysis</h4>
+              <div class="trend-value">
+                <span id="average-wind">-- km/h</span>
+              </div>
+              <div class="trend-detail" id="max-wind">Max: -- km/h</div>
+              <div class="trend-detail" id="min-wind">Min: -- km/h</div>
+            </div>
+
+            <div class="trend-card">
+              <h4><i class="fas fa-tint"></i> Humidity Analysis</h4>
+              <div class="trend-value">
+                <span id="average-humidity">--%</span>
+              </div>
+              <div class="trend-detail" id="max-humidity">Max: --%</div>
+              <div class="trend-detail" id="min-humidity">Min: --%</div>
+            </div>
+
+            <div class="trend-card">
+              <h4><i class="fas fa-chart-line"></i> Temperature Range</h4>
+              <div class="trend-value trend-range">
+                <span id="temp-variation">--°C</span>
+              </div>
+              <div class="trend-detail">Daily variation</div>
+              <div class="trend-detail" id="largest-swing">Largest swing: --°C</div>
+            </div>
+          </div>
+
+          <!-- Detailed Statistics -->
+          <div class="trend-stats">
+            <div class="stat-item">
+              <div class="label">Most Common Condition</div>
+              <div class="value" id="most-common-condition">--</div>
+            </div>
+            <div class="stat-item">
+              <div class="label">Days with Rain</div>
+              <div class="value" id="rainy-days">--</div>
+            </div>
+            <div class="stat-item">
+              <div class="label">Days with High Wind</div>
+              <div class="value" id="windy-days">--</div>
+            </div>
+            <div class="stat-item">
+              <div class="label">Temperature Stability</div>
+              <div class="value" id="temp-stability">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trends Chart -->
+        <div class="card">
+          <h3><i class="fas fa-chart-area"></i> Temperature Extremes Timeline</h3>
+          <div class="chart-container">
+            <canvas id="trends-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Pattern Recognition Tab -->
     <div class="tab-content" id="pattern-recognition-content">
       <div class="results" id="pattern-recognition-results">
@@ -1287,7 +1486,7 @@
               </thead>
               <tbody></tbody>
             </table>
-            
+
             <!-- Performance Explanation -->
             <div class="performance-explanation">
               <h5><i class="fas fa-chart-line"></i> Performance Scale Explanation</h5>
@@ -1349,6 +1548,217 @@
   </div>
 
   <script>
+    // Function to analyze trends and extremes from predictions
+    function analyzeTrends(predictions) {
+      if (!predictions || predictions.length === 0) {
+        return null;
+      }
+
+      // Temperature analysis
+      const temps = predictions.map(p => parseFloat(p.avg_temp));
+      const maxTemps = predictions.map(p => parseFloat(p.max_temp));
+      const minTemps = predictions.map(p => parseFloat(p.min_temp));
+
+      const highestTemp = Math.max(...maxTemps);
+      const lowestTemp = Math.min(...minTemps);
+      const averageTemp = temps.reduce((sum, temp) => sum + temp, 0) / temps.length;
+
+      // Find the day with highest and lowest temperatures
+      const highestTempDay = predictions.find(p => parseFloat(p.max_temp) === highestTemp);
+      const lowestTempDay = predictions.find(p => parseFloat(p.min_temp) === lowestTemp);
+
+      // Temperature range and variation
+      const tempRange = highestTemp - lowestTemp;
+      const dailyVariations = predictions.map(p => parseFloat(p.max_temp) - parseFloat(p.min_temp));
+      const largestDailySwing = Math.max(...dailyVariations);
+
+      // Wind analysis
+      const winds = predictions.map(p => parseFloat(p.wind));
+      const averageWind = winds.reduce((sum, wind) => sum + wind, 0) / winds.length;
+      const maxWind = Math.max(...winds);
+      const minWind = Math.min(...winds);
+
+      // Humidity analysis
+      const humidities = predictions.map(p => parseFloat(p.humidity));
+      const averageHumidity = humidities.reduce((sum, humidity) => sum + humidity, 0) / humidities.length;
+      const maxHumidity = Math.max(...humidities);
+      const minHumidity = Math.min(...humidities);
+
+      // Weather condition analysis
+      const conditions = predictions.map(p => p.condition);
+      const conditionCounts = conditions.reduce((acc, condition) => {
+        acc[condition] = (acc[condition] || 0) + 1;
+        return acc;
+      }, {});
+
+      const mostCommonCondition = Object.keys(conditionCounts).reduce((a, b) =>
+        conditionCounts[a] > conditionCounts[b] ? a : b
+      );
+
+      // Count specific conditions
+      const rainyDays = predictions.filter(p =>
+        p.condition.toLowerCase().includes('rain') ||
+        p.condition.toLowerCase().includes('shower') ||
+        p.condition.toLowerCase().includes('drizzle')
+      ).length;
+
+      const windyDays = predictions.filter(p =>
+        parseFloat(p.wind) > 20
+      ).length;
+
+      // Temperature stability (standard deviation)
+      const tempStdDev = Math.sqrt(
+        temps.reduce((sum, temp) => sum + Math.pow(temp - averageTemp, 2), 0) / temps.length
+      );
+
+      const stabilityRating = tempStdDev < 2 ? 'Very Stable' :
+                            tempStdDev < 4 ? 'Stable' :
+                            tempStdDev < 6 ? 'Moderate' : 'Variable';
+
+      return {
+        highestTemp: Math.round(highestTemp * 10) / 10,
+        lowestTemp: Math.round(lowestTemp * 10) / 10,
+        averageTemp: Math.round(averageTemp * 10) / 10,
+        tempRange: Math.round(tempRange * 10) / 10,
+        largestDailySwing: Math.round(largestDailySwing * 10) / 10,
+        averageWind: Math.round(averageWind * 10) / 10,
+        maxWind: Math.round(maxWind * 10) / 10,
+        minWind: Math.round(minWind * 10) / 10,
+        averageHumidity: Math.round(averageHumidity * 10) / 10,
+        maxHumidity: Math.round(maxHumidity * 10) / 10,
+        minHumidity: Math.round(minHumidity * 10) / 10,
+        mostCommonCondition,
+        rainyDays,
+        windyDays,
+        tempStability: stabilityRating,
+        highestTempDay,
+        lowestTempDay,
+        dates: predictions.map(p => formatDate(p.date)),
+        maxTemps,
+        minTemps,
+        avgTemps: temps
+      };
+    }
+
+    // Function to render trends data
+    function renderTrends(trendsData, cityName) {
+      if (!trendsData) return;
+
+      document.getElementById('trends-city-name').textContent = cityName;
+
+      // Update trend cards
+      document.getElementById('highest-temp').textContent = `${trendsData.highestTemp}°C`;
+      document.getElementById('highest-temp-date').textContent = `Date: ${formatDate(trendsData.highestTempDay.date)}`;
+      document.getElementById('highest-temp-condition').textContent = `Condition: ${trendsData.highestTempDay.condition}`;
+
+      document.getElementById('lowest-temp').textContent = `${trendsData.lowestTemp}°C`;
+      document.getElementById('lowest-temp-date').textContent = `Date: ${formatDate(trendsData.lowestTempDay.date)}`;
+      document.getElementById('lowest-temp-condition').textContent = `Condition: ${trendsData.lowestTempDay.condition}`;
+
+      document.getElementById('average-temp').textContent = `${trendsData.averageTemp}°C`;
+      document.getElementById('temp-range').textContent = `Range: ${trendsData.tempRange}°C`;
+
+      document.getElementById('average-wind').textContent = `${trendsData.averageWind} km/h`;
+      document.getElementById('max-wind').textContent = `Max: ${trendsData.maxWind} km/h`;
+      document.getElementById('min-wind').textContent = `Min: ${trendsData.minWind} km/h`;
+
+      document.getElementById('average-humidity').textContent = `${trendsData.averageHumidity}%`;
+      document.getElementById('max-humidity').textContent = `Max: ${trendsData.maxHumidity}%`;
+      document.getElementById('min-humidity').textContent = `Min: ${trendsData.minHumidity}%`;
+
+      document.getElementById('temp-variation').textContent = `${trendsData.largestDailySwing}°C`;
+      document.getElementById('largest-swing').textContent = `Largest swing: ${trendsData.largestDailySwing}°C`;
+
+      // Update detailed statistics
+      document.getElementById('most-common-condition').textContent = trendsData.mostCommonCondition;
+      document.getElementById('rainy-days').textContent = `${trendsData.rainyDays} days`;
+      document.getElementById('windy-days').textContent = `${trendsData.windyDays} days`;
+      document.getElementById('temp-stability').textContent = trendsData.tempStability;
+
+      // Update trends chart
+      updateTrendsChart(trendsData);
+    }
+
+    // Function to initialize and update trends chart
+    let trendsChart = null;
+
+    function initializeTrendsChart() {
+      const trendsChartCtx = document.getElementById('trends-chart').getContext('2d');
+
+      trendsChart = new Chart(trendsChartCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Max Temperature',
+              data: [],
+              borderColor: '#e74c3c',
+              backgroundColor: 'rgba(231, 76, 60, 0.1)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Average Temperature',
+              data: [],
+              borderColor: '#3498db',
+              backgroundColor: 'rgba(52, 152, 219, 0.1)',
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: 'Min Temperature',
+              data: [],
+              borderColor: '#2ecc71',
+              backgroundColor: 'rgba(46, 204, 113, 0.1)',
+              tension: 0.3,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Temperature Extremes Over Time'
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Temperature (°C)'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updateTrendsChart(trendsData) {
+      if (!trendsChart) {
+        initializeTrendsChart();
+      }
+
+      trendsChart.data.labels = trendsData.dates;
+      trendsChart.data.datasets[0].data = trendsData.maxTemps;
+      trendsChart.data.datasets[1].data = trendsData.avgTemps;
+      trendsChart.data.datasets[2].data = trendsData.minTemps;
+      trendsChart.update();
+    }
+
     // Enhanced Weather advice generation function with confidence indicators
     function generateWeatherAdvice(predictions, modelMetrics = {}) {
       if (!predictions || predictions.length === 0) return {};
@@ -1740,7 +2150,6 @@
     }
 
 
-
     function addRealTimeWeather() {
     // Real-time weather indicators
     const realTimeHTML = `
@@ -1949,7 +2358,7 @@ function stopRealTimeUpdates() {
     function getPerformanceBadge(r2Score) {
         let badgeClass = '';
         let badgeText = '';
-        
+
         if (r2Score > 0.9) {
             badgeClass = 'badge-outstanding';
             badgeText = '(Outstanding)';
@@ -1978,7 +2387,7 @@ function stopRealTimeUpdates() {
             badgeClass = 'badge-very-weak';
             badgeText = '(Very Weak)';
         }
-        
+
         return `<span class="performance-badge ${badgeClass}">${badgeText}</span>`;
     }
 
@@ -2005,7 +2414,7 @@ function stopRealTimeUpdates() {
       if (Object.keys(modelResults).length === 1) {
         const [modelName, result] = Object.entries(modelResults)[0];
         const performanceBadge = getPerformanceBadge(result.r2 || 0);
-        
+
         comparisonBody.innerHTML = `
           <tr>
             <td><strong>${modelName}</strong> ${performanceBadge} <span class="model-status status-selected">✅ Selected</span></td>
@@ -2031,13 +2440,13 @@ function stopRealTimeUpdates() {
         const isSelected = modelName === bestModel;
         const statusClass = isSelected ? 'status-selected' : 'status-trained';
         const statusText = isSelected ? '✅ Selected' : 'Trained';
-        
+
         const performanceBadge = getPerformanceBadge(result.r2 || 0);
 
         comparisonBody.insertAdjacentHTML("beforeend", `
           <tr>
             <td>
-                <strong>${modelName}</strong> 
+                <strong>${modelName}</strong>
                 ${performanceBadge}
             </td>
             <td>${result.r2 !== undefined ? result.r2.toFixed(4) : 'N/A'}</td>
@@ -2362,6 +2771,8 @@ function stopRealTimeUpdates() {
 
           if (tabId === 'predictions') {
             document.getElementById('predictions-content').classList.add('active');
+          } else if (tabId === 'trends') {
+            document.getElementById('trends-content').classList.add('active');
           } else if (tabId === 'pattern-recognition') {
             document.getElementById('pattern-recognition-content').classList.add('active');
           } else if (tabId === 'advice') {
@@ -2881,6 +3292,7 @@ function stopRealTimeUpdates() {
       const loadingIndicator = document.getElementById("loading-indicator");
       const results = document.getElementById("results");
       const patternRecognitionResults = document.getElementById("pattern-recognition-results");
+      const trendsResults = document.getElementById("trends-results");
       const errorDiv = document.getElementById('error-message');
       const tabNavigation = document.getElementById('tab-navigation');
 
@@ -2888,6 +3300,7 @@ function stopRealTimeUpdates() {
       errorDiv.style.display = 'none';
       results.style.display = 'none';
       patternRecognitionResults.style.display = 'none';
+      trendsResults.style.display = 'none';
       document.getElementById('historical-results').style.display = 'none';
       document.getElementById('advice-results').style.display = 'none';
       loadingIndicator.style.display = "block";
@@ -2912,7 +3325,7 @@ function stopRealTimeUpdates() {
 
         // Show tab navigation
         tabNavigation.style.display = 'flex';
-        // Start real-time weather updates for this city
+        // Start real-time weather updates for the specific
         startRealTimeUpdates(city);
         // Update dashboard cards
         const avgTemp = data.predictions.reduce((sum, day) => sum + parseFloat(day.avg_temp), 0) / data.predictions.length;
@@ -3035,6 +3448,13 @@ function stopRealTimeUpdates() {
         // Chart
         document.getElementById("forecast-chart").src = "data:image/png;base64," + data.chart;
 
+        // Generate and display trends analysis
+        const trendsData = analyzeTrends(data.predictions);
+        if (trendsData) {
+          renderTrends(trendsData, data.city);
+          trendsResults.style.display = "block";
+        }
+
         // Generate and display weather advice with confidence indicators
         const weatherAdvice = generateWeatherAdvice(data.predictions, data.metrics);
         renderAdvice(weatherAdvice, data.city);
@@ -3042,6 +3462,8 @@ function stopRealTimeUpdates() {
         results.style.display = "block";
         patternRecognitionResults.style.display = "block";
         document.getElementById('historical-results').style.display = "block";
+        document.querySelector('.real-time-dashboard').style.display = 'block';
+
 
         // Also load historical data for this city
         loadHistoricalData(city);
@@ -3092,6 +3514,7 @@ function stopRealTimeUpdates() {
       initializeCharts();
       initializeHistoricalChart();
       initializePerformanceChart();
+      initializeTrendsChart();
 
       // Initialize interval controls
       setupIntervalControls();
@@ -3099,9 +3522,8 @@ function stopRealTimeUpdates() {
       setupTabs();
       // Initialize download buttons
       setupDownloadButtons();
-      // Add real-time weather dashboard
+     // Add real time weather monitoring section
       addRealTimeWeather();
-      
     });
   </script>
 </body>
