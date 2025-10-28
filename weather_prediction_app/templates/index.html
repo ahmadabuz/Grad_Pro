@@ -887,7 +887,7 @@
 
   .trend-stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 15px;
     margin-top: 20px;
   }
@@ -1172,9 +1172,6 @@
   text-decoration: underline;
 }
 
-
-
-
   </style>
 </head>
 <body>
@@ -1266,7 +1263,35 @@
           </div>
         </div>
 
-
+        <!-- Real-time Weather Dashboard -->
+        <div class="real-time-dashboard">
+          <h3><i class="fas fa-satellite"></i> Real-time Weather Monitoring</h3>
+          <div class="real-time-grid">
+            <div class="real-time-card">
+              <div class="real-time-icon"><i class="fas fa-temperature-high"></i></div>
+              <div class="real-time-value" id="current-temp">--°C</div>
+              <div class="real-time-label">Current Temperature</div>
+            </div>
+            <div class="real-time-card">
+              <div class="real-time-icon"><i class="fas fa-tint"></i></div>
+              <div class="real-time-value" id="current-humidity">--%</div>
+              <div class="real-time-label">Current Humidity</div>
+            </div>
+            <div class="real-time-card">
+              <div class="real-time-icon"><i class="fas fa-wind"></i></div>
+              <div class="real-time-value" id="current-wind">-- km/h</div>
+              <div class="real-time-label">Wind Speed</div>
+            </div>
+            <div class="real-time-card">
+              <div class="real-time-icon"><i class="fas fa-cloud"></i></div>
+              <div class="real-time-value" id="current-condition">--</div>
+              <div class="real-time-label">Current Condition</div>
+            </div>
+          </div>
+          <div class="real-time-footer">
+            <small><i class="fas fa-sync-alt"></i> Updates every 30 seconds</small>
+          </div>
+        </div>
 
         <!-- Chart Grid -->
         <div class="chart-grid">
@@ -1385,24 +1410,6 @@
             </div>
 
             <div class="trend-card">
-              <h4><i class="fas fa-temperature-average"></i> Average Temperature</h4>
-              <div class="trend-value trend-average">
-                <span id="average-temp">--°C</span>
-              </div>
-              <div class="trend-detail">7-day forecast period</div>
-              <div class="trend-detail" id="temp-range">Range: --°C</div>
-            </div>
-
-            <div class="trend-card">
-              <h4><i class="fas fa-wind"></i> Wind Analysis</h4>
-              <div class="trend-value">
-                <span id="average-wind">-- km/h</span>
-              </div>
-              <div class="trend-detail" id="max-wind">Max: -- km/h</div>
-              <div class="trend-detail" id="min-wind">Min: -- km/h</div>
-            </div>
-
-            <div class="trend-card">
               <h4><i class="fas fa-tint"></i> Humidity Analysis</h4>
               <div class="trend-value">
                 <span id="average-humidity">--%</span>
@@ -1419,6 +1426,24 @@
               <div class="trend-detail">Daily variation</div>
               <div class="trend-detail" id="largest-swing">Largest swing: --°C</div>
             </div>
+
+            <div class="trend-card">
+              <h4><i class="fas fa-temperature-average"></i> Average Temperature</h4>
+              <div class="trend-value trend-average">
+                <span id="average-temp">--°C</span>
+              </div>
+              <div class="trend-detail">7-day forecast period</div>
+              <div class="trend-detail" id="temp-range">Range: --°C</div>
+            </div>
+
+            <div class="trend-card">
+              <h4><i class="fas fa-wind"></i> Wind Analysis</h4>
+              <div class="trend-value">
+                <span id="average-wind">-- km/h</span>
+              </div>
+              <div class="trend-detail" id="max-wind">Max: -- km/h</div>
+              <div class="trend-detail" id="min-wind">Min: -- km/h</div>
+            </div>
           </div>
 
           <!-- Detailed Statistics -->
@@ -1434,10 +1459,6 @@
             <div class="stat-item">
               <div class="label">Days with High Wind</div>
               <div class="value" id="windy-days">--</div>
-            </div>
-            <div class="stat-item">
-              <div class="label">Temperature Stability</div>
-              <div class="value" id="temp-stability">--</div>
             </div>
           </div>
         </div>
@@ -1606,15 +1627,6 @@
         parseFloat(p.wind) > 20
       ).length;
 
-      // Temperature stability (standard deviation)
-      const tempStdDev = Math.sqrt(
-        temps.reduce((sum, temp) => sum + Math.pow(temp - averageTemp, 2), 0) / temps.length
-      );
-
-      const stabilityRating = tempStdDev < 2 ? 'Very Stable' :
-                            tempStdDev < 4 ? 'Stable' :
-                            tempStdDev < 6 ? 'Moderate' : 'Variable';
-
       return {
         highestTemp: Math.round(highestTemp * 10) / 10,
         lowestTemp: Math.round(lowestTemp * 10) / 10,
@@ -1630,7 +1642,6 @@
         mostCommonCondition,
         rainyDays,
         windyDays,
-        tempStability: stabilityRating,
         highestTempDay,
         lowestTempDay,
         dates: predictions.map(p => formatDate(p.date)),
@@ -1673,7 +1684,6 @@
       document.getElementById('most-common-condition').textContent = trendsData.mostCommonCondition;
       document.getElementById('rainy-days').textContent = `${trendsData.rainyDays} days`;
       document.getElementById('windy-days').textContent = `${trendsData.windyDays} days`;
-      document.getElementById('temp-stability').textContent = trendsData.tempStability;
 
       // Update trends chart
       updateTrendsChart(trendsData);
@@ -2149,153 +2159,111 @@
       return advice;
     }
 
+    // Function to update real-time weather data
+    async function updateRealTimeWeather(city) {
+        try {
+            const response = await fetch(`/current-weather/${encodeURIComponent(city)}`);
+            const data = await response.json();
 
-    function addRealTimeWeather() {
-    // Real-time weather indicators
-    const realTimeHTML = `
-    <div class="real-time-dashboard">
-        <h3><i class="fas fa-satellite"></i> Real-time Weather Monitoring</h3>
-        <div class="real-time-grid">
-            <div class="real-time-card">
-                <div class="real-time-icon"><i class="fas fa-temperature-high"></i></div>
-                <div class="real-time-value" id="current-temp">--°C</div>
-                <div class="real-time-label">Current Temperature</div>
-            </div>
-            <div class="real-time-card">
-                <div class="real-time-icon"><i class="fas fa-tint"></i></div>
-                <div class="real-time-value" id="current-humidity">--%</div>
-                <div class="real-time-label">Current Humidity</div>
-            </div>
-            <div class="real-time-card">
-                <div class="real-time-icon"><i class="fas fa-wind"></i></div>
-                <div class="real-time-value" id="current-wind">-- km/h</div>
-                <div class="real-time-label">Wind Speed</div>
-            </div>
-            <div class="real-time-card">
-                <div class="real-time-icon"><i class="fas fa-cloud"></i></div>
-                <div class="real-time-value" id="current-condition">--</div>
-                <div class="real-time-label">Current Condition</div>
-            </div>
-        </div>
-        <div class="real-time-footer">
-            <small><i class="fas fa-sync-alt"></i> Updates every 30 seconds</small>
-        </div>
-    </div>
-    `;
+            if (data.success && data.current_weather) {
+                const weather = data.current_weather;
 
-    // Add to predictions tab after dashboard cards
-    const dashboardGrid = document.querySelector('.dashboard-grid');
-    dashboardGrid.insertAdjacentHTML('afterend', realTimeHTML);
-}
+                // Update the dashboard elements
+                document.getElementById('current-temp').textContent = `${Math.round(weather.temp_c)}°C`;
+                document.getElementById('current-humidity').textContent = `${weather.humidity}%`;
+                document.getElementById('current-wind').textContent = `${Math.round(weather.wind_kph)} km/h`;
+                document.getElementById('current-condition').textContent = weather.condition;
 
-// Function to update real-time weather data
-async function updateRealTimeWeather(city) {
-    try {
-        const response = await fetch(`/current-weather/${encodeURIComponent(city)}`);
-        const data = await response.json();
-
-        if (data.success && data.current_weather) {
-            const weather = data.current_weather;
-
-            // Update the dashboard elements
-            document.getElementById('current-temp').textContent = `${Math.round(weather.temp_c)}°C`;
-            document.getElementById('current-humidity').textContent = `${weather.humidity}%`;
-            document.getElementById('current-wind').textContent = `${Math.round(weather.wind_kph)} km/h`;
-            document.getElementById('current-condition').textContent = weather.condition;
-
-            // Add color coding based on conditions
-            updateRealTimeColors(weather);
-        } else {
-            console.error('Failed to fetch real-time weather:', data.error);
+                // Add color coding based on conditions
+                updateRealTimeColors(weather);
+            } else {
+                console.error('Failed to fetch real-time weather:', data.error);
+                setRealTimePlaceholders();
+            }
+        } catch (error) {
+            console.error('Error fetching real-time weather:', error);
             setRealTimePlaceholders();
         }
-    } catch (error) {
-        console.error('Error fetching real-time weather:', error);
+    }
+
+    // Function to update colors based on weather conditions
+    function updateRealTimeColors(weather) {
+        const tempElement = document.getElementById('current-temp');
+        const humidityElement = document.getElementById('current-humidity');
+        const windElement = document.getElementById('current-wind');
+
+        // Temperature color coding
+        if (weather.temp_c > 30) {
+            tempElement.style.color = '#e74c3c'; // Hot - red
+        } else if (weather.temp_c > 20) {
+            tempElement.style.color = '#f39c12'; // Warm - orange
+        } else if (weather.temp_c > 10) {
+            tempElement.style.color = '#27ae60'; // Mild - green
+        } else if (weather.temp_c > 0) {
+            tempElement.style.color = '#3498db'; // Cool - blue
+        } else {
+            tempElement.style.color = '#8e44ad'; // Cold - purple
+        }
+
+        // Humidity color coding
+        if (weather.humidity > 80) {
+            humidityElement.style.color = '#3498db'; // High humidity - blue
+        } else if (weather.humidity > 50) {
+            humidityElement.style.color = '#27ae60'; // Moderate - green
+        } else {
+            humidityElement.style.color = '#e67e22'; // Low - orange
+        }
+
+        // Wind speed color coding
+        if (weather.wind_kph > 30) {
+            windElement.style.color = '#e74c3c'; // Strong wind - red
+        } else if (weather.wind_kph > 15) {
+            windElement.style.color = '#f39c12'; // Moderate wind - orange
+        } else {
+            windElement.style.color = '#27ae60'; // Light wind - green
+        }
+    }
+
+    // Function to set placeholder values
+    function setRealTimePlaceholders() {
+        document.getElementById('current-temp').textContent = '--°C';
+        document.getElementById('current-humidity').textContent = '--%';
+        document.getElementById('current-wind').textContent = '-- km/h';
+        document.getElementById('current-condition').textContent = '--';
+
+        // Reset colors
+        const elements = ['current-temp', 'current-humidity', 'current-wind'];
+        elements.forEach(id => {
+            document.getElementById(id).style.color = '#2d3748';
+        });
+    }
+
+    // Function to start real-time updates
+    let realTimeInterval = null;
+
+    function startRealTimeUpdates(city) {
+        // Clear existing interval
+        if (realTimeInterval) {
+            clearInterval(realTimeInterval);
+        }
+
+        // Initial update
+        updateRealTimeWeather(city);
+
+        // Set up interval for updates every 30 seconds
+        realTimeInterval = setInterval(() => {
+            updateRealTimeWeather(city);
+        }, 30000); // 30 seconds
+    }
+
+    // Function to stop real-time updates
+    function stopRealTimeUpdates() {
+        if (realTimeInterval) {
+            clearInterval(realTimeInterval);
+            realTimeInterval = null;
+        }
         setRealTimePlaceholders();
     }
-}
-
-// Function to update colors based on weather conditions
-function updateRealTimeColors(weather) {
-    const tempElement = document.getElementById('current-temp');
-    const humidityElement = document.getElementById('current-humidity');
-    const windElement = document.getElementById('current-wind');
-
-    // Temperature color coding
-    if (weather.temp_c > 30) {
-        tempElement.style.color = '#e74c3c'; // Hot - red
-    } else if (weather.temp_c > 20) {
-        tempElement.style.color = '#f39c12'; // Warm - orange
-    } else if (weather.temp_c > 10) {
-        tempElement.style.color = '#27ae60'; // Mild - green
-    } else if (weather.temp_c > 0) {
-        tempElement.style.color = '#3498db'; // Cool - blue
-    } else {
-        tempElement.style.color = '#8e44ad'; // Cold - purple
-    }
-
-    // Humidity color coding
-    if (weather.humidity > 80) {
-        humidityElement.style.color = '#3498db'; // High humidity - blue
-    } else if (weather.humidity > 50) {
-        humidityElement.style.color = '#27ae60'; // Moderate - green
-    } else {
-        humidityElement.style.color = '#e67e22'; // Low - orange
-    }
-
-    // Wind speed color coding
-    if (weather.wind_kph > 30) {
-        windElement.style.color = '#e74c3c'; // Strong wind - red
-    } else if (weather.wind_kph > 15) {
-        windElement.style.color = '#f39c12'; // Moderate wind - orange
-    } else {
-        windElement.style.color = '#27ae60'; // Light wind - green
-    }
-}
-
-// Function to set placeholder values
-function setRealTimePlaceholders() {
-    document.getElementById('current-temp').textContent = '--°C';
-    document.getElementById('current-humidity').textContent = '--%';
-    document.getElementById('current-wind').textContent = '-- km/h';
-    document.getElementById('current-condition').textContent = '--';
-
-    // Reset colors
-    const elements = ['current-temp', 'current-humidity', 'current-wind'];
-    elements.forEach(id => {
-        document.getElementById(id).style.color = '#2d3748';
-    });
-}
-
-// Function to start real-time updates
-let realTimeInterval = null;
-
-function startRealTimeUpdates(city) {
-    // Clear existing interval
-    if (realTimeInterval) {
-        clearInterval(realTimeInterval);
-    }
-
-    // Initial update
-    updateRealTimeWeather(city);
-
-    // Set up interval for updates every 30 seconds
-    realTimeInterval = setInterval(() => {
-        updateRealTimeWeather(city);
-    }, 30000); // 30 seconds
-}
-
-// Function to stop real-time updates
-function stopRealTimeUpdates() {
-    if (realTimeInterval) {
-        clearInterval(realTimeInterval);
-        realTimeInterval = null;
-    }
-    setRealTimePlaceholders();
-}
-
-
-
 
     // Helper function to calculate temperature consistency
     function calculateTemperatureConsistency(predictions) {
@@ -3522,8 +3490,6 @@ function stopRealTimeUpdates() {
       setupTabs();
       // Initialize download buttons
       setupDownloadButtons();
-     // Add real time weather monitoring section
-      addRealTimeWeather();
     });
   </script>
 </body>
