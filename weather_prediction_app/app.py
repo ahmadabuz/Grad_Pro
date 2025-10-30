@@ -82,7 +82,7 @@ class ModelPerformance(db.Model):
     model_comparison = db.Column(db.JSON, nullable=True)  # Store all model results
     
 
-API_KEY = "387452ec05eb4b38b74113541251610"
+API_KEY = "6d5c56f6a0194288ad7102220253010"
 BASE_URL = "https://api.weatherapi.com/v1"
 
 # Keep-alive system
@@ -371,7 +371,7 @@ class WeatherPredictor:
     def train_model(self, city):
         """Complete model training pipeline"""
         try:
-            data = self.fetch_weather_data(city, days=180)
+            data = self.fetch_weather_data(city, days=365)
             if not data or len(data)<50:
                 return {"error": f"No city found with name '{city}' or insufficient data."}
 
