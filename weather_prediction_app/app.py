@@ -1321,26 +1321,37 @@ def debug_metrics(city):
 
 @app.route('/historical-data/<city>', methods=['GET'])
 def get_historical_data(city):
-    """Get historical weather data for analysis"""
+    """Get historical weather data - PAST DATES INCLUDING TODAY"""
     try:
-        # Get date range from query parameters or use default
-        days = request.args.get('days', 30, type=int)
-        end_date = datetime.now().date()
-        start_date = end_date - timedelta(days=days)
+        today = datetime.now().date()
+        print(f"Historical data request for {city} - returning data up to {today}")
 
-        # Get historical predictions
-        predictions = Prediction.query.filter(
+        # Get predictions for PAST dates INCLUDING TODAY, latest version only
+        from sqlalchemy import func
+
+        # Subquery to get the latest generation_timestamp for each date
+        subquery = db.session.query(
+            Prediction.prediction_date,
+            func.max(Prediction.generation_timestamp).label('max_timestamp')
+        ).filter(
             Prediction.city == city,
-            Prediction.prediction_date >= start_date,
-            Prediction.prediction_date <= end_date,
-            Prediction.is_current == True  # Only get the most recent predictions for each date
-        ).order_by(Prediction.prediction_date.asc()).all()
+            Prediction.prediction_date <= today  # DATES UP TO AND INCLUDING TODAY
+        ).group_by(Prediction.prediction_date).subquery()
+
+        # Get predictions with the latest timestamp for each date
+        predictions = Prediction.query.join(
+            subquery,
+            (Prediction.prediction_date == subquery.c.prediction_date) &
+            (Prediction.generation_timestamp == subquery.c.max_timestamp)
+        ).order_by(Prediction.prediction_date.desc()).all()
 
         if not predictions:
             return jsonify({
                 'success': False,
-                'error': 'No historical data found for this city'
+                'error': f'No historical data found for city "{city}"'
             })
+
+        print(f"Returning {len(predictions)} historical date predictions for {city} (up to {today})")
 
         # Format the response
         result = []
@@ -1354,19 +1365,21 @@ def get_historical_data(city):
                 'wind_speed': pred.wind_speed,
                 'condition': pred.condition,
                 'model_version': pred.model_version,
-                'generated_at': pred.generation_timestamp.isoformat()
+                'generated_at': pred.generation_timestamp.isoformat(),
+                'version': pred.version,
+                'is_current': pred.is_current
             })
 
         return jsonify({
             'success': True,
             'city': city,
             'data': result,
-            'date_range': {
-                'start': start_date.isoformat(),
-                'end': end_date.isoformat()
-            }
+            'total_days': len(result),
+            'cutoff_date': today.isoformat(),
+            'note': f'Returning {len(result)} historical days (up to {today})'
         })
     except Exception as e:
+        print(f"Error in historical data: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1416,26 +1429,46 @@ def get_historical_performance(city):
 
 @app.route('/download-historical-data/<city>', methods=['GET'])
 def download_historical_data(city):
-    """Download historical weather data as CSV"""
+    """Download historical weather data - PAST DATES INCLUDING TODAY"""
     try:
-        # Get days parameter or default to 30
         days = request.args.get('days', 30, type=int)
-        end_date = datetime.now().date()
-        start_date = end_date - timedelta(days=days)
+        today = datetime.now().date()
+        
+        print(f"Download request for {city}: {days} days up to {today}")
 
-        # Get historical predictions
-        predictions = Prediction.query.filter(
+        # Get the latest version for each PAST date (including today)
+        from sqlalchemy import func
+        
+        subquery = db.session.query(
+            Prediction.prediction_date,
+            func.max(Prediction.generation_timestamp).label('max_timestamp')
+        ).filter(
             Prediction.city == city,
-            Prediction.prediction_date >= start_date,
-            Prediction.prediction_date <= end_date,
-            Prediction.is_current == True
-        ).order_by(Prediction.prediction_date.asc()).all()
+            Prediction.prediction_date <= today
+        ).group_by(Prediction.prediction_date).subquery()
 
-        if not predictions:
+        all_predictions = Prediction.query.join(
+            subquery,
+            (Prediction.prediction_date == subquery.c.prediction_date) &
+            (Prediction.generation_timestamp == subquery.c.max_timestamp)
+        ).order_by(Prediction.prediction_date.desc()).limit(days * 2).all()
+
+        if not all_predictions:
             return jsonify({
                 'success': False,
                 'error': 'No historical data found for this city'
             })
+
+        # Take the most recent 'days' predictions
+        if len(all_predictions) < days:
+            selected_predictions = all_predictions
+        else:
+            selected_predictions = all_predictions[:days]
+
+        # Sort chronologically for CSV
+        selected_predictions.sort(key=lambda x: x.prediction_date)
+
+        print(f"Download prepared for {city}: {len(selected_predictions)} historical days")
 
         # Create CSV in memory
         output = StringIO()
@@ -1446,11 +1479,11 @@ def download_historical_data(city):
             'Date', 'Min Temperature (°C)', 'Max Temperature (°C)',
             'Average Temperature (°C)', 'Humidity (%)',
             'Wind Speed (km/h)', 'Weather Condition', 'Model Version',
-            'Prediction Generated At'
+            'Prediction Generated At', 'Version', 'Is Current'
         ])
 
         # Write data rows
-        for pred in predictions:
+        for pred in selected_predictions:
             writer.writerow([
                 pred.prediction_date.strftime('%Y-%m-%d'),
                 pred.min_temp,
@@ -1460,17 +1493,21 @@ def download_historical_data(city):
                 pred.wind_speed,
                 pred.condition,
                 pred.model_version,
-                pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                pred.version,
+                'Yes' if pred.is_current else 'No'
             ])
 
         # Create response
         output.seek(0)
         response = make_response(output.getvalue())
-        response.headers['Content-Disposition'] = f'attachment; filename={city}_weather_data.csv'
+        actual_days = len(selected_predictions)
+        response.headers['Content-Disposition'] = f'attachment; filename={city}_historical_weather_data_{actual_days}days.csv'
         response.headers['Content-type'] = 'text/csv'
         return response
 
     except Exception as e:
+        print(f"Download error: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1542,12 +1579,28 @@ def download_performance_data(city):
 
 @app.route('/download-all-weather-data/<city>', methods=['GET'])
 def download_all_weather_data(city):
-    """Download ALL historical weather data as CSV from database"""
+    """Download ALL historical weather data as CSV - NO FUTURE PREDICTIONS, NO DUPLICATES"""
     try:
-        # Get ALL historical predictions for this city
-        predictions = Prediction.query.filter(
+        today = datetime.now().date()
+        print(f"Download ALL historical data for {city} - up to {today}")
+
+        # Get ONLY historical data (past dates including today), latest version only
+        from sqlalchemy import func
+
+        # Subquery to get the latest generation_timestamp for each PAST date
+        subquery = db.session.query(
+            Prediction.prediction_date,
+            func.max(Prediction.generation_timestamp).label('max_timestamp')
+        ).filter(
             Prediction.city == city,
-            Prediction.is_current == True
+            Prediction.prediction_date <= today  # ONLY DATES UP TO AND INCLUDING TODAY
+        ).group_by(Prediction.prediction_date).subquery()
+
+        # Get predictions with the latest timestamp for each PAST date
+        predictions = Prediction.query.join(
+            subquery,
+            (Prediction.prediction_date == subquery.c.prediction_date) &
+            (Prediction.generation_timestamp == subquery.c.max_timestamp)
         ).order_by(Prediction.prediction_date.asc()).all()
 
         if not predictions:
@@ -1555,6 +1608,8 @@ def download_all_weather_data(city):
                 'success': False,
                 'error': 'No historical data found for this city'
             })
+
+        print(f"Downloading {len(predictions)} historical records for {city} (up to {today})")
 
         # Create CSV in memory
         output = StringIO()
@@ -1565,7 +1620,7 @@ def download_all_weather_data(city):
             'Date', 'Min Temperature (°C)', 'Max Temperature (°C)',
             'Average Temperature (°C)', 'Humidity (%)',
             'Wind Speed (km/h)', 'Weather Condition', 'Model Version',
-            'Prediction Generated At', 'Version'
+            'Prediction Generated At', 'Version', 'Is Current'
         ])
 
         # Write data rows
@@ -1580,17 +1635,19 @@ def download_all_weather_data(city):
                 pred.condition,
                 pred.model_version,
                 pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                pred.version
+                pred.version,
+                'Yes' if pred.is_current else 'No'
             ])
 
         # Create response
         output.seek(0)
         response = make_response(output.getvalue())
-        response.headers['Content-Disposition'] = f'attachment; filename={city}_all_weather_data.csv'
+        response.headers['Content-Disposition'] = f'attachment; filename={city}_all_historical_weather_data.csv'
         response.headers['Content-type'] = 'text/csv'
         return response
 
     except Exception as e:
+        print(f"Download error: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
