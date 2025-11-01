@@ -2755,18 +2755,72 @@
     let fullPerformanceData = [];
     let currentCity = '';
 
-    // Function to filter historical data by days
-    function filterHistoricalDataByDays(data, days) {
-      if (days === 'all') return data;
+   // Function to filter historical data by days - FIXED
+// Function to filter historical data by days - COMPLETELY FIXED
+function filterHistoricalDataByDays(data, days) {
+  if (days === 'all') return data;
 
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
+  const numDays = parseInt(days);
 
-      return data.filter(item => {
-        const itemDate = new Date(item.date);
-        return itemDate >= cutoffDate;
-      });
+  console.log(`Frontend filtering: Requested ${numDays} days from ${data.length} total records`);
+
+  // Data is already sorted by date descending (newest first) from backend
+  // Take the first 'numDays' records (most recent)
+  const recentData = data.slice(0, numDays);
+
+  // Sort them chronologically for display
+  recentData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  console.log(`Returning ${recentData.length} days after filtering`);
+  console.log('Dates:', recentData.map(d => d.date));
+
+  return recentData;
+}
+
+// Function to load historical data - FIXED
+async function loadHistoricalData(city) {
+  const loadingIndicator = document.getElementById('loading-indicator');
+  const historicalResults = document.getElementById('historical-results');
+
+  loadingIndicator.style.display = "block";
+  historicalResults.style.display = "none";
+
+  try {
+    // Load ALL historical weather data - no days parameter
+    const historicalRes = await fetch(`/historical-data/${city}`);
+    const historicalData = await historicalRes.json();
+
+    if (!historicalData.success) {
+      showError("Historical data error: " + historicalData.error);
+      loadingIndicator.style.display = "none";
+      return;
     }
+
+    console.log(`Loaded ${historicalData.data.length} total records for ${city}`);
+
+    // Store full datasets globally
+    fullHistoricalData = historicalData.data || [];
+    currentCity = city;
+
+    // Update historical data display
+    document.getElementById('historical-city-name').textContent = city;
+
+    // Initialize charts if not already initialized
+    if (!historicalChart) {
+      initializeHistoricalChart();
+    }
+
+    // Update charts with initial intervals
+    updateHistoricalChart();
+
+    historicalResults.style.display = "block";
+    loadingIndicator.style.display = "none";
+
+  } catch (err) {
+    loadingIndicator.style.display = "none";
+    showError("Failed to load historical data: " + err.message);
+  }
+}
 
     // Function to filter performance data by record count
     function filterPerformanceDataByCount(data, count) {
@@ -3182,66 +3236,66 @@
       return dateString;
     }
 
-    // Function to load historical data
-    async function loadHistoricalData(city) {
-      const loadingIndicator = document.getElementById('loading-indicator');
-      const historicalResults = document.getElementById('historical-results');
+   // Function to load historical data - FIXED
+async function loadHistoricalData(city) {
+  const loadingIndicator = document.getElementById('loading-indicator');
+  const historicalResults = document.getElementById('historical-results');
 
-      loadingIndicator.style.display = "block";
-      historicalResults.style.display = "none";
+  loadingIndicator.style.display = "block";
+  historicalResults.style.display = "none";
 
-      try {
-        // Load historical weather data
-        const historicalRes = await fetch(`/historical-data/${city}`);
-        const historicalData = await historicalRes.json();
+  try {
+    // Load historical weather data - NO FILTERING, get all data
+    const historicalRes = await fetch(`/historical-data/${city}?days=365`); // Get a large number to ensure we get all data
+    const historicalData = await historicalRes.json();
 
-        if (!historicalData.success) {
-          showError("Historical data error: " + historicalData.error);
-          loadingIndicator.style.display = "none";
-          return;
-        }
-
-        // Load performance data
-        const performanceRes = await fetch(`/historical-performance/${city}?limit=1000`);
-        const performanceData = await performanceRes.json();
-
-        // Store full datasets globally
-        fullHistoricalData = historicalData.data || [];
-        fullPerformanceData = performanceData.success ? (performanceData.performances || []) : [];
-        currentCity = city;
-
-        // Update historical data display
-        document.getElementById('historical-city-name').textContent = city;
-
-        // Initialize charts if not already initialized
-        if (!historicalChart) {
-          initializeHistoricalChart();
-        }
-        if (!performanceChart) {
-          initializePerformanceChart();
-        }
-
-        // Update charts with initial intervals
-        updateHistoricalChart();
-
-        // Update performance chart if data available
-        if (performanceData.success && fullPerformanceData.length > 0) {
-          updatePerformanceChart();
-        } else {
-          // Clear performance chart if no data
-          performanceChart.data.labels = [];
-          performanceChart.data.datasets.forEach(dataset => dataset.data = []);
-          performanceChart.update();
-        }
-
-        historicalResults.style.display = "block";
-        loadingIndicator.style.display = "none";
-
-      } catch (err) {
-        loadingIndicator.style.display = "none";
-        showError("Failed to load historical data: " + err.message);
-      }
+    if (!historicalData.success) {
+      showError("Historical data error: " + historicalData.error);
+      loadingIndicator.style.display = "none";
+      return;
     }
+
+    // Load performance data
+    const performanceRes = await fetch(`/historical-performance/${city}?limit=1000`);
+    const performanceData = await performanceRes.json();
+
+    // Store full datasets globally
+    fullHistoricalData = historicalData.data || [];
+    fullPerformanceData = performanceData.success ? (performanceData.performances || []) : [];
+    currentCity = city;
+
+    // Update historical data display
+    document.getElementById('historical-city-name').textContent = city;
+
+    // Initialize charts if not already initialized
+    if (!historicalChart) {
+      initializeHistoricalChart();
+    }
+    if (!performanceChart) {
+      initializePerformanceChart();
+    }
+
+    // Update charts with initial intervals
+    updateHistoricalChart();
+
+    // Update performance chart if data available
+    if (performanceData.success && fullPerformanceData.length > 0) {
+      updatePerformanceChart();
+    } else {
+      // Clear performance chart if no data
+      performanceChart.data.labels = [];
+      performanceChart.data.datasets.forEach(dataset => dataset.data = []);
+      performanceChart.update();
+    }
+
+    historicalResults.style.display = "block";
+    loadingIndicator.style.display = "none";
+
+  } catch (err) {
+    loadingIndicator.style.display = "none";
+    showError("Failed to load historical data: " + err.message);
+  }
+}
 
     document.getElementById("predictBtn").addEventListener("click", async () => {
       const predictBtn = document.getElementById("predictBtn");
