@@ -702,15 +702,15 @@ def cleanup_old_predictions():
         print(f"Error cleaning up old predictions: {e}")
 
 def save_predictions_to_db(city, predictions, model_name, model_metrics, model_comparison=None):
-    """Save predictions to the database, preserving historical data"""
+    """Save predictions to the database, properly managing is_current flags"""
     try:
         generation_time = datetime.now()
         today = datetime.now().date()
 
-        # First, mark all previous predictions for this city as not current
+        # FIXED: Mark ALL previous predictions for this city as not current
+        # (not just future dates)
         Prediction.query.filter(
             Prediction.city == city,
-            Prediction.prediction_date >= today,
             Prediction.is_current == True
         ).update({'is_current': False}, synchronize_session=False)
 
@@ -728,29 +728,31 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics, model_c
             else:
                 prediction_date = prediction['date'].date()
 
-            # Only save predictions for today and future dates
-            if prediction_date >= today:
-                new_prediction = Prediction(
-                    city=city,
-                    prediction_date=prediction_date,
-                    generation_timestamp=generation_time,
-                    model_version=model_name or "Unknown",
-                    min_temp=prediction['min_temp'],
-                    max_temp=prediction['max_temp'],
-                    avg_temp=prediction['avg_temp'],
-                    humidity=prediction['humidity'],
-                    wind_speed=prediction['wind'],
-                    condition=prediction['condition'],
-                    is_current=True,
-                    version=new_version
-                )
-                db.session.add(new_prediction)
+            # Only save predictions for today and future dates as current
+            # Past dates should remain as historical records
+            is_current_prediction = prediction_date >= today
+
+            new_prediction = Prediction(
+                city=city,
+                prediction_date=prediction_date,
+                generation_timestamp=generation_time,
+                model_version=model_name or "Unknown",
+                min_temp=prediction['min_temp'],
+                max_temp=prediction['max_temp'],
+                avg_temp=prediction['avg_temp'],
+                humidity=prediction['humidity'],
+                wind_speed=prediction['wind'],
+                condition=prediction['condition'],
+                is_current=is_current_prediction,  # Only current for today/future
+                version=new_version
+            )
+            db.session.add(new_prediction)
 
         # Calculate overall R² score from detailed metrics
         overall_r2 = 0
         overall_mae = 0
         overall_rmse = 0
-        
+
         if model_metrics and isinstance(model_metrics, dict):
             # Extract R² scores from each parameter and average them
             r2_scores = []
