@@ -1495,6 +1495,9 @@ def download_historical_data(city):
                 pred.wind_speed,
                 pred.condition,
                 pred.model_version,
+                pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                pred.version,
+                'Yes' if pred.is_current else 'No'
             ])
 
         # Create response
@@ -1633,6 +1636,9 @@ def download_all_weather_data(city):
                 pred.wind_speed,
                 pred.condition,
                 pred.model_version,
+                pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                pred.version,
+                'Yes' if pred.is_current else 'No'
             ])
 
         # Create response
@@ -2112,7 +2118,34 @@ def get_current_weather(city):
             'error': str(e)
         })
 
-
+@app.route('/fix-current-flags')
+def fix_current_flags():
+    """One-time fix for is_current flags"""
+    try:
+        today = datetime.now().date()
+        
+        # Mark past predictions as not current
+        past_updated = Prediction.query.filter(
+            Prediction.prediction_date < today
+        ).update({'is_current': False})
+        
+        # Mark current/future as current  
+        future_updated = Prediction.query.filter(
+            Prediction.prediction_date >= today
+        ).update({'is_current': True})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Fixed {past_updated} past records and {future_updated} current/future records',
+            'past_updated': past_updated,
+            'future_updated': future_updated
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/trigger-daily-predictions')
 def trigger_daily_predictions():
