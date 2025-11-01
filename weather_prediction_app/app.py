@@ -1495,9 +1495,6 @@ def download_historical_data(city):
                 pred.wind_speed,
                 pred.condition,
                 pred.model_version,
-                pred.generation_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                pred.version,
-                'Yes' if pred.is_current else 'No'
             ])
 
         # Create response
