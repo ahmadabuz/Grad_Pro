@@ -1993,7 +1993,7 @@ def migrate_database():
 
 
 
-'''
+
 @app.route('/fix-database', methods=['GET', 'POST'])
 def fix_database():
     """Fix PostgreSQL database schema for deployed version"""
@@ -2070,7 +2070,7 @@ def fix_database():
             </body>
         </html>
         """
-'''
+
 
 @app.route('/current-weather/<city>', methods=['GET'])
 def get_current_weather(city):
