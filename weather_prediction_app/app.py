@@ -1957,7 +1957,7 @@ def generate_daily_predictions():
 
 
 
-'''
+
 @app.route('/migrate-database', methods=['GET', 'POST'])
 def migrate_database():
     """Add model_comparison column to existing database"""
@@ -1990,7 +1990,7 @@ def migrate_database():
             
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-'''
+
 
 
 '''
