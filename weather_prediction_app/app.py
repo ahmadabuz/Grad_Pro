@@ -131,6 +131,23 @@ class WeatherPredictor:
         self.best_model_name = None
         self.cache = {}
         self.cache_lock = threading.Lock()
+        self.city_climate_zones = {
+            # Desert/Arid Climate
+            'amman': 'desert', 'damascus': 'desert', 'cairo': 'desert',
+            'dubai': 'desert', 'riyadh': 'desert', 'kuwait': 'desert',
+            # Mediterranean Climate
+            'beirut': 'mediterranean', 'jerusalem': 'mediterranean',
+            'istanbul': 'mediterranean', 'athens': 'mediterranean',
+            # Continental Climate
+            'london': 'temperate', 'paris': 'temperate', 'berlin': 'temperate',
+            'moscow': 'continental', 'warsaw': 'continental',
+            # Tropical Climate
+            'mumbai': 'tropical', 'bangkok': 'tropical', 'singapore': 'tropical',
+            'manila': 'tropical',
+            # Default
+            'default': 'temperate'
+        }
+        self.current_city = None
 
     def get_cache_key(self, city, days=7):
         """Generate a unique key for the cache based on city and date."""
@@ -145,13 +162,15 @@ class WeatherPredictor:
     def save_prediction_to_cache(self, cache_key, prediction_data):
         """Save a prediction to the cache."""
         with self.cache_lock:
+            # Limit cache size to prevent memory issues
             if len(self.cache) > 50:
+                # Remove oldest entry
                 oldest_key = next(iter(self.cache))
                 del self.cache[oldest_key]
             self.cache[cache_key] = prediction_data
 
     def clear_old_cache(self):
-        """Clear cache entries older than 2 days"""
+        """Clear cache entries"""
         with self.cache_lock:
             current_date = datetime.now().strftime("%Y-%m-%d")
             keys_to_remove = []
@@ -180,6 +199,7 @@ class WeatherPredictor:
 
                 response = requests.get(url, params=params, timeout=30)
 
+                # Check if city is invalid
                 if response.status_code != 200:
                     try:
                         error_message = response.json().get('error', {}).get('message', 'Unknown error')
@@ -189,6 +209,7 @@ class WeatherPredictor:
 
                 data = response.json()
 
+                # Ensure forecast data exists
                 if "forecast" not in data or "forecastday" not in data["forecast"]:
                     raise ValueError("City not found or no forecast data available.")
 
@@ -214,150 +235,303 @@ class WeatherPredictor:
 
         return historical_data
 
+    def get_climate_zone(self, city):
+        """Determine climate zone for a city"""
+        city_lower = city.lower()
+        for city_key, zone in self.city_climate_zones.items():
+            if city_key in city_lower:
+                return zone
+        return self.city_climate_zones['default']
+
     def prepare_advanced_features(self, data):
-        """Prepare advanced features for machine learning"""
+        """Enhanced feature engineering with climate-specific features"""
         df = pd.DataFrame(data)
         df['date'] = pd.to_datetime(df['date'])
+
+        # Basic temporal features
         df['day_of_year'] = df['date'].dt.dayofyear
-        df['day_sin'] = np.sin(2 * np.pi * df['day_of_year'] / 365)
-        df['day_cos'] = np.cos(2 * np.pi * df['day_of_year'] / 365)
+        df['day_sin'] = np.sin(2 * np.pi * df['day_of_year'] / 365.25)
+        df['day_cos'] = np.cos(2 * np.pi * df['day_of_year'] / 365.25)
         df['month'] = df['date'].dt.month
         df['week_of_year'] = df['date'].dt.isocalendar().week
         df['is_weekend'] = df['date'].dt.weekday >= 5
 
-        for lag in [1, 2, 3, 7, 14]:
-            for col in ['avg_c', 'humidity', 'wind_kph']:
+        # Enhanced lag features with more variation
+        for lag in [1, 2, 3, 5, 7, 10, 14]:
+            for col in ['avg_c', 'humidity', 'wind_kph', 'precip_mm']:
                 df[f'{col}_lag_{lag}'] = df[col].shift(lag)
 
-        for window in [3,7,14]:
-            for col in ['avg_c', 'humidity', 'wind_kph']:
-                df[f'{col}_rolling_mean_{window}'] = df[col].rolling(window=window).mean()
-                df[f'{col}_rolling_std_{window}'] = df[col].rolling(window=window).std()
+        # Rolling statistics with more windows
+        for window in [3, 5, 7, 10, 14]:
+            for col in ['avg_c', 'humidity', 'wind_kph', 'precip_mm']:
+                df[f'{col}_rolling_mean_{window}'] = df[col].rolling(window=window, min_periods=1).mean()
+                df[f'{col}_rolling_std_{window}'] = df[col].rolling(window=window, min_periods=1).std()
+                df[f'{col}_rolling_min_{window}'] = df[col].rolling(window=window, min_periods=1).min()
+                df[f'{col}_rolling_max_{window}'] = df[col].rolling(window=window, min_periods=1).max()
 
-        for diff in [1, 7]:
-            for col in ['avg_c', 'wind_kph']:
+        # Enhanced difference features
+        for diff in [1, 2, 3, 7]:
+            for col in ['avg_c', 'wind_kph', 'humidity', 'precip_mm']:
                 df[f'{col}_diff_{diff}'] = df[col].diff(diff)
 
-        df['temp_humidity_interaction'] = df['avg_c'] * df['humidity']
-        df['temp_wind_interaction'] = df['avg_c'] * df['wind_kph']
+        # Advanced interaction features
+        df['temp_humidity_interaction'] = df['avg_c'] * (df['humidity'] / 100)
+        df['temp_wind_chill'] = 13.12 + 0.6215 * df['avg_c'] - 11.37 * (df['wind_kph'] ** 0.16) + 0.3965 * df[
+            'avg_c'] * (df['wind_kph'] ** 0.16)
+        df['heat_index'] = self.calculate_heat_index(df['avg_c'], df['humidity'])
+        df['dew_point'] = self.calculate_dew_point(df['avg_c'], df['humidity'])
+
+        # Seasonal features with transitions
         df['is_summer'] = df['month'].isin([6, 7, 8])
         df['is_winter'] = df['month'].isin([12, 1, 2])
+        df['is_spring'] = df['month'].isin([3, 4, 5])
+        df['is_fall'] = df['month'].isin([9, 10, 11])
 
-        df = df.fillna(method='bfill').fillna(method='ffill')
-        df = df.dropna()
+        # Seasonal transitions (more realistic weather changes)
+        df['season_transition'] = df['month'].apply(lambda x: abs(x - 3) if x in [2, 3, 4] else
+        abs(x - 6) if x in [5, 6, 7] else
+        abs(x - 9) if x in [8, 9, 10] else
+        abs(x - 12) if x in [11, 12, 1] else 0)
+
+        # Weather regime features
+        df['pressure_tendency'] = df['avg_c'].diff(3)
+        df['stability_index'] = df['avg_c_rolling_std_7'] / (df['humidity_rolling_std_7'] + 1)
+
+        # Cyclical patterns
+        df['year_progress'] = df['day_of_year'] / 365.25
+        df['semiannual_cycle'] = np.sin(4 * np.pi * df['day_of_year'] / 365.25)
+
+        # Fill missing values with more sophisticated method
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            df[col] = df[col].fillna(method='ffill').fillna(method='bfill').fillna(df[col].mean())
 
         return df
 
+    def calculate_heat_index(self, temp, humidity):
+        """Calculate heat index for realistic temperature perception"""
+        # Simplified heat index calculation
+        return temp + 0.1 * (humidity - 50)
+
+    def calculate_dew_point(self, temp, humidity):
+        """Calculate dew point for humidity analysis"""
+        # Magnus formula approximation
+        alpha = 17.27
+        beta = 237.7
+        gamma = (alpha * temp) / (beta + temp) + np.log(humidity / 100.0)
+        return (beta * gamma) / (alpha - gamma)
+
     def train_advanced_models(self, X_train, X_test, y_train, y_test):
-        """Train advanced machine learning models with tuned parameters"""
+        """Enhanced model training with better hyperparameters"""
         models = {
-            'ElasticNet': ElasticNet(alpha=0.01, l1_ratio=0.7, random_state=42, max_iter=10000),
-            'Ridge': Ridge(alpha=0.1, random_state=42, max_iter=10000),
-            'Lasso': Lasso(alpha=0.01, random_state=42, max_iter=10000),
-            'RandomForest': RandomForestRegressor(n_estimators=100, max_depth=8, random_state=42, n_jobs=-1),
-            'GradientBoosting': GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, random_state=42),
-            'XGBoost': xgb.XGBRegressor(n_estimators=100, learning_rate=0.1, max_depth=6, random_state=42, n_jobs=-1),
-            'LightGBM': lgb.LGBMRegressor(n_estimators=100, learning_rate=0.1, max_depth=6, random_state=42, n_jobs=-1),
+            'ElasticNet': ElasticNet(alpha=0.1, l1_ratio=0.5, random_state=42, max_iter=5000),
+            'Ridge': Ridge(alpha=1.0, random_state=42, max_iter=5000),
+            'Lasso': Lasso(alpha=0.05, random_state=42, max_iter=5000),
+            'RandomForest': RandomForestRegressor(
+                n_estimators=200,
+                max_depth=15,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                max_features='sqrt',
+                random_state=42,
+                n_jobs=-1
+            ),
+            'GradientBoosting': GradientBoostingRegressor(
+                n_estimators=150,
+                learning_rate=0.08,
+                max_depth=6,
+                min_samples_split=10,
+                random_state=42
+            ),
+            'XGBoost': xgb.XGBRegressor(
+                n_estimators=150,
+                learning_rate=0.1,
+                max_depth=8,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                n_jobs=-1
+            ),
+            'LightGBM': lgb.LGBMRegressor(
+                n_estimators=150,
+                learning_rate=0.1,
+                max_depth=8,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                n_jobs=-1
+            ),
         }
 
         results = {}
 
         for name, model in models.items():
-            if name in ['ElasticNet', 'Ridge', 'Lasso', 'GradientBoosting', 'XGBoost', 'LightGBM']:
-                multi_model = MultiOutputRegressor(model)
-                multi_model.fit(X_train, y_train)
-                y_pred = multi_model.predict(X_test)
-                trained_model = multi_model
-            else:
-                model.fit(X_train, y_train)
-                y_pred = model.predict(X_test)
-                trained_model = model
+            try:
+                if name in ['ElasticNet', 'Ridge', 'Lasso', 'GradientBoosting', 'XGBoost', 'LightGBM']:
+                    multi_model = MultiOutputRegressor(model, n_jobs=1)
+                    multi_model.fit(X_train, y_train)
+                    y_pred_train = multi_model.predict(X_train)
+                    y_pred = multi_model.predict(X_test)
+                    trained_model = multi_model
+                else:
+                    model.fit(X_train, y_train)
+                    y_pred_train = model.predict(X_train)
+                    y_pred = model.predict(X_test)
+                    trained_model = model
 
-            metrics = {}
-            for i, target_name in enumerate(['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']):
-                metrics[target_name] = {
-                    'mae': mean_absolute_error(y_test[:, i], y_pred[:, i]),
-                    'rmse': np.sqrt(mean_squared_error(y_test[:, i], y_pred[:, i])),
-                    'r2': r2_score(y_test[:, i], y_pred[:, i])
+                # Calculate metrics
+                r2_train = r2_score(y_train, y_pred_train)
+                r2_test = r2_score(y_test, y_pred)
+
+                print(f"{name}: R² Train = {r2_train:.4f}, R² Test = {r2_test:.4f}")
+
+                # Calculate metrics for each target
+                metrics = {}
+                for i, target_name in enumerate(['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']):
+                    metrics[target_name] = {
+                        'mae': mean_absolute_error(y_test[:, i], y_pred[:, i]),
+                        'rmse': np.sqrt(mean_squared_error(y_test[:, i], y_pred[:, i])),
+                        'r2': r2_score(y_test[:, i], y_pred[:, i])
+                    }
+
+                # Overall metrics
+                overall_metrics = {
+                    'mae': np.mean([m['mae'] for m in metrics.values()]),
+                    'rmse': np.mean([m['rmse'] for m in metrics.values()]),
+                    'r2': np.mean([m['r2'] for m in metrics.values()]),
+                    'model': trained_model,
+                    'detailed_metrics': metrics
                 }
 
-            overall_metrics = {
-                'mae': np.mean([m['mae'] for m in metrics.values()]),
-                'rmse': np.mean([m['rmse'] for m in metrics.values()]),
-                'r2': np.mean([m['r2'] for m in metrics.values()]),
-                'model': trained_model,
-                'detailed_metrics': metrics
-            }
+                results[name] = overall_metrics
 
-            results[name] = overall_metrics
+            except Exception as e:
+                print(f"Error training {name}: {e}")
+                continue
 
         return results
 
+    def add_realistic_variation(self, predictions, city):
+        """Add realistic weather variations based on climate zone"""
+        climate_zone = self.get_climate_zone(city)
+
+        for i, pred in enumerate(predictions):
+            # Add small random variations based on climate zone
+            variation_factors = {
+                'desert': {'temp_var': 1.5, 'humidity_var': 3, 'wind_var': 2},
+                'mediterranean': {'temp_var': 2.0, 'humidity_var': 5, 'wind_var': 3},
+                'temperate': {'temp_var': 2.5, 'humidity_var': 8, 'wind_var': 4},
+                'continental': {'temp_var': 3.0, 'humidity_var': 10, 'wind_var': 5},
+                'tropical': {'temp_var': 1.0, 'humidity_var': 5, 'wind_var': 3}
+            }
+
+            factors = variation_factors.get(climate_zone, variation_factors['temperate'])
+
+            # Add progressive variation (more variation in later days)
+            progress_factor = (i + 1) / len(predictions)
+
+            # Temperature variation
+            temp_variation = np.random.normal(0, factors['temp_var'] * progress_factor)
+            pred['min_temp'] = round(pred['min_temp'] + temp_variation * 0.7, 1)
+            pred['max_temp'] = round(pred['max_temp'] + temp_variation * 1.3, 1)
+            pred['avg_temp'] = round((pred['min_temp'] + pred['max_temp']) / 2, 1)
+
+            # Humidity variation
+            humidity_variation = np.random.normal(0, factors['humidity_var'] * progress_factor)
+            pred['humidity'] = round(max(10, min(95, pred['humidity'] + humidity_variation)), 1)
+
+            # Wind variation
+            wind_variation = np.random.normal(0, factors['wind_var'] * progress_factor)
+            pred['wind'] = round(max(0, pred['wind'] + wind_variation), 1)
+
+            # Ensure logical relationships
+            if pred['min_temp'] > pred['avg_temp']:
+                pred['avg_temp'] = (pred['min_temp'] + pred['max_temp']) / 2
+            if pred['avg_temp'] > pred['max_temp']:
+                pred['avg_temp'] = (pred['min_temp'] + pred['max_temp']) / 2
+
+        return predictions
+
     def create_future_features(self, last_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
+        """Enhanced future feature creation with better variation"""
         future_features_list = []
         last_features = df[feature_cols].iloc[-1:].to_dict('records')[0]
-        recent_data = df[['avg_c', 'humidity', 'wind_kph']].tail(15).to_dict('records')
- 
+        recent_data = df[['avg_c', 'humidity', 'wind_kph', 'precip_mm']].tail(20).to_dict('records')
+
         for i in range(future_days):
-            future_date = last_date + timedelta(days=i + 1)  # This is the key line!
+            future_date = last_date + timedelta(days=i + 1)
             day_of_year = future_date.timetuple().tm_yday
+
+            # Update time-based features with enhanced variations
             current_features = last_features.copy()
             current_features['day_of_year'] = day_of_year
-            current_features['day_sin'] = np.sin(2 * np.pi * day_of_year / 365)
-            current_features['day_cos'] = np.cos(2 * np.pi * day_of_year / 365)
+            current_features['day_sin'] = np.sin(2 * np.pi * day_of_year / 365.25)
+            current_features['day_cos'] = np.cos(2 * np.pi * day_of_year / 365.25)
             current_features['month'] = future_date.month
             current_features['week_of_year'] = future_date.isocalendar().week
             current_features['is_weekend'] = future_date.weekday() >= 5
             current_features['is_summer'] = future_date.month in [6, 7, 8]
             current_features['is_winter'] = future_date.month in [12, 1, 2]
+            current_features['is_spring'] = future_date.month in [3, 4, 5]
+            current_features['is_fall'] = future_date.month in [9, 10, 11]
+
+            # Add seasonal transition
+            current_features['season_transition'] = abs(future_date.month - 3) if future_date.month in [2, 3, 4] else \
+                abs(future_date.month - 6) if future_date.month in [5, 6, 7] else \
+                    abs(future_date.month - 9) if future_date.month in [8, 9, 10] else \
+                        abs(future_date.month - 12) if future_date.month in [11, 12, 1] else 0
 
             # Convert to DataFrame for scaling and prediction
             current_features_df = pd.DataFrame([current_features])[feature_cols]
             current_features_scaled = scaler_X.transform(current_features_df.values)
             predicted_scaled = best_model.predict(current_features_scaled)
             predicted_original = scaler_y.inverse_transform(predicted_scaled)
+
             # Update the recent_data with the new prediction
             predicted_data = {
-            'avg_c': predicted_original[0][0],
-            'min_c': predicted_original[0][1],
-            'max_c': predicted_original[0][2],
-            'humidity': predicted_original[0][3],
-            'wind_kph': predicted_original[0][4]
+                'avg_c': predicted_original[0][0],
+                'min_c': predicted_original[0][1],
+                'max_c': predicted_original[0][2],
+                'humidity': predicted_original[0][3],
+                'wind_kph': predicted_original[0][4]
             }
             recent_data.append(predicted_data)
-            recent_data = recent_data[-15:]
+            recent_data = recent_data[-20:]  # Keep recent context
+
             # Create a temporary DataFrame from recent_data to calculate updated features
             temp_recent_df = pd.DataFrame(recent_data)
 
-            # Recalculate lag and rolling features
+            # Enhanced feature recalculation with noise for variation
             for lag in [1, 2, 3, 7, 14]:
                 for col in ['avg_c', 'humidity', 'wind_kph']:
                     lag_col_name = f'{col}_lag_{lag}'
                     if lag_col_name in feature_cols:
-                        lag_value = temp_recent_df[col].shift(lag).iloc[-1]
-                        current_features[lag_col_name] = lag_value
+                        if len(temp_recent_df) > lag:
+                            lag_value = temp_recent_df[col].shift(lag).iloc[-1]
+                            # Add small noise to prevent over-smoothing
+                            if not pd.isna(lag_value):
+                                noise = np.random.normal(0, 0.1) if col == 'avg_c' else np.random.normal(0, 0.5)
+                                current_features[lag_col_name] = lag_value + noise
+                        else:
+                            current_features[lag_col_name] = current_features.get(lag_col_name, 0)
 
             for window in [3, 7, 14]:
                 for col in ['avg_c', 'humidity', 'wind_kph']:
                     rolling_mean_col_name = f'{col}_rolling_mean_{window}'
                     rolling_std_col_name = f'{col}_rolling_std_{window}'
-                    if rolling_mean_col_name in feature_cols:
-                        rolling_mean_value = temp_recent_df[col].rolling(window=window).mean().iloc[-1]
-                        current_features[rolling_mean_col_name] = rolling_mean_value
-                    if rolling_std_col_name in feature_cols:
-                        rolling_std_value = temp_recent_df[col].rolling(window=window).std().iloc[-1]
-                        current_features[rolling_std_col_name] = rolling_std_value
 
-            # Recalculate difference features
-            for diff in [1, 7]:
-                for col in ['avg_c', 'wind_kph']:
-                    diff_col_name = f'{col}_diff_{diff}'
-                    if diff_col_name in feature_cols:
-                        diff_value = temp_recent_df[col].diff(diff).iloc[-1]
-                        current_features[diff_col_name] = diff_value
+                    if rolling_mean_col_name in feature_cols and len(temp_recent_df) >= window:
+                        rolling_mean_value = temp_recent_df[col].rolling(window=window).mean().iloc[-1]
+                        if not pd.isna(rolling_mean_value):
+                            current_features[rolling_mean_col_name] = rolling_mean_value
+
+                    if rolling_std_col_name in feature_cols and len(temp_recent_df) >= window:
+                        rolling_std_value = temp_recent_df[col].rolling(window=window).std().iloc[-1]
+                        if not pd.isna(rolling_std_value):
+                            current_features[rolling_std_col_name] = rolling_std_value
 
             # Recalculate interaction features
-            current_features['temp_humidity_interaction'] = predicted_data['avg_c'] * predicted_data['humidity']
+            current_features['temp_humidity_interaction'] = predicted_data['avg_c'] * (predicted_data['humidity'] / 100)
             current_features['temp_wind_interaction'] = predicted_data['avg_c'] * predicted_data['wind_kph']
 
             # Store the updated features
@@ -366,67 +540,23 @@ class WeatherPredictor:
 
         return np.array(future_features_list)
 
-
-        
-    def train_model(self, city):
-        """Complete model training pipeline"""
-        try:
-            data = self.fetch_weather_data(city, days=365)
-            if not data or len(data)<50:
-                return {"error": f"No city found with name '{city}' or insufficient data."}
-
-            self.df = self.prepare_advanced_features(data)
-            target_cols = ['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']
-            self.feature_cols = [col for col in self.df.columns if col not in target_cols + ['date']]
-
-            X = self.df[self.feature_cols].values
-            y = self.df[target_cols].values
-
-            split_idx = int(len(X) * 0.8)
-            X_train, X_test = X[:split_idx], X[split_idx:]
-            y_train, y_test = y[:split_idx], y[split_idx:]
-
-            self.scaler_X = StandardScaler()
-            X_train_scaled = self.scaler_X.fit_transform(X_train)
-            X_test_scaled = self.scaler_X.transform(X_test)
-
-            self.scaler_y = StandardScaler()
-            y_train_scaled = self.scaler_y.fit_transform(y_train)
-            y_test_scaled = self.scaler_y.transform(y_test)
-
-            self.results = self.train_advanced_models(X_train_scaled, X_test_scaled, y_train_scaled, y_test_scaled)
-
-            best_r2 = -np.inf
-            for name, result in self.results.items():
-                if result['r2'] > best_r2:
-                    best_r2 = result['r2']
-                    self.best_model_name = name
-
-            self.model = self.results[self.best_model_name]['model']
-
-            return {"success": True, "best_model": self.best_model_name, "r2_score": best_r2}
-
-        except Exception as e:
-            return {"error": str(e)}
-
     def predict_weather(self, days=7):
-        """Generate weather predictions starting from TODAY"""
+        """Generate weather predictions with enhanced realism"""
         try:
             if self.model is None:
                 return {"error": "Model not trained"}
 
-            # FIX: Start from TODAY instead of last historical date
             today = datetime.now().date()
             print(f"Generating predictions starting from: {today}")
-            
-            # Use today as the starting point
+
+            # Get base predictions
             future_X = self.create_future_features(
-                pd.to_datetime(today),  # CHANGED: Start from today
-                days, 
-                self.df, 
+                pd.to_datetime(today),
+                days,
+                self.df,
                 self.feature_cols,
-                self.model, 
-                self.scaler_X, 
+                self.model,
+                self.scaler_X,
                 self.scaler_y
             )
 
@@ -441,19 +571,21 @@ class WeatherPredictor:
                 columns=['avg_temp', 'min_temp', 'max_temp', 'humidity', 'wind']
             )
 
-            predictions_df['humidity'] = predictions_df['humidity'].clip(0, 100)
-            predictions_df['min_temp'] = predictions_df['min_temp'].clip(-60, 60)
-            predictions_df['max_temp'] = predictions_df['max_temp'].clip(-60, 60)
-            predictions_df['avg_temp'] = predictions_df['avg_temp'].clip(-60, 60)
-            predictions_df['wind'] = predictions_df['wind'].clip(0, 300)
-            
+            # Apply realistic constraints
+            predictions_df['humidity'] = predictions_df['humidity'].clip(10, 95)
+            predictions_df['min_temp'] = predictions_df['min_temp'].clip(-50, 50)
+            predictions_df['max_temp'] = predictions_df['max_temp'].clip(-50, 50)
+            predictions_df['avg_temp'] = predictions_df['avg_temp'].clip(-50, 50)
+            predictions_df['wind'] = predictions_df['wind'].clip(0, 150)
+
+            # Ensure logical temperature relationships
             for i, row in predictions_df.iterrows():
                 if row['min_temp'] > row['avg_temp']:
                     predictions_df.at[i, 'avg_temp'] = (row['min_temp'] + row['max_temp']) / 2
                 if row['avg_temp'] > row['max_temp']:
                     predictions_df.at[i, 'avg_temp'] = (row['min_temp'] + row['max_temp']) / 2
 
-            # FIX: Generate dates starting from TODAY
+            # Generate dates
             future_dates = [today + timedelta(days=i) for i in range(days)]
             predictions_df['date'] = future_dates
             predictions_df['date'] = pd.to_datetime(predictions_df['date'])
@@ -463,6 +595,7 @@ class WeatherPredictor:
             else:
                 recent_precip = 0
 
+            # Convert to list format
             predictions_list = []
             for i, (_, row) in enumerate(predictions_df.iterrows()):
                 avg_temp = row['avg_temp']
@@ -487,6 +620,10 @@ class WeatherPredictor:
                     'condition': condition
                 })
 
+            # Apply climate-specific variations
+            if hasattr(self, 'current_city') and self.current_city:
+                predictions_list = self.add_realistic_variation(predictions_list, self.current_city)
+
             print(f"Generated predictions for: {[d.strftime('%Y-%m-%d') for d in future_dates]}")
             return {"success": True, "predictions": predictions_list}
 
@@ -494,147 +631,218 @@ class WeatherPredictor:
             print(f"Prediction error: {e}")
             return {"error": str(e)}
 
-    def determine_weather_condition(self, avg_temp, min_temp, max_temp, humidity, wind, month, recent_precip, day_index):
-        """Determine detailed weather condition based on multiple factors"""
-        is_summer = month in [6, 7, 8]
-        is_winter = month in [12, 1, 2]
-        is_spring = month in [3, 4, 5]
-        is_fall = month in [9, 10, 11]
+    def train_model(self, city):
+        """Complete model training pipeline with city context"""
+        try:
+            self.current_city = city  # Store city for variation adjustments
 
-        if avg_temp > 35:
-            temp_intensity = "Extremely Hot"
-            temp_feel = "sweltering"
-        elif avg_temp > 30:
-            temp_intensity = "Very Hot"
-            temp_feel = "hot"
-        elif avg_temp > 25:
-            temp_intensity = "Hot"
-            temp_feel = "warm"
-        elif avg_temp > 20:
-            temp_intensity = "Pleasantly Warm"
-            temp_feel = "mild"
-        elif avg_temp > 15:
-            temp_intensity = "Mild"
-            temp_feel = "cool"
-        elif avg_temp > 10:
-            temp_intensity = "Cool"
-            temp_feel = "chilly"
-        elif avg_temp > 5:
-            temp_intensity = "Cold"
-            temp_feel = "cold"
-        elif avg_temp > 0:
-            temp_intensity = "Very Cold"
-            temp_feel = "freezing"
+            # Fetch data
+            data = self.fetch_weather_data(city, days=365)
+            if not data or len(data) < 50:
+                return {"error": f"No city found with name '{city}' or insufficient data."}
+
+            # Prepare features
+            self.df = self.prepare_advanced_features(data)
+
+            # Target columns
+            target_cols = ['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']
+            self.feature_cols = [col for col in self.df.columns if col not in target_cols + ['date']]
+
+            X = self.df[self.feature_cols].values
+            y = self.df[target_cols].values
+
+            # Enhanced train-test split with time series awareness
+            split_idx = int(len(X) * 0.8)
+            X_train, X_test = X[:split_idx], X[split_idx:]
+            y_train, y_test = y[:split_idx], y[split_idx:]
+
+            # Scale features
+            self.scaler_X = StandardScaler()
+            X_train_scaled = self.scaler_X.fit_transform(X_train)
+            X_test_scaled = self.scaler_X.transform(X_test)
+
+            self.scaler_y = StandardScaler()
+            y_train_scaled = self.scaler_y.fit_transform(y_train)
+            y_test_scaled = self.scaler_y.transform(y_test)
+
+            # Train models
+            self.results = self.train_advanced_models(X_train_scaled, X_test_scaled, y_train_scaled, y_test_scaled)
+
+            if not self.results:
+                return {"error": "No models trained successfully"}
+
+            # Find best model
+            best_r2 = -np.inf
+            for name, result in self.results.items():
+                if result['r2'] > best_r2:
+                    best_r2 = result['r2']
+                    self.best_model_name = name
+
+            # Use the best model
+            self.model = self.results[self.best_model_name]['model']
+
+            print(f"Best model: {self.best_model_name} with R²: {best_r2:.4f}")
+            return {"success": True, "best_model": self.best_model_name, "r2_score": best_r2}
+
+        except Exception as e:
+            return {"error": str(e)}
+
+    def determine_weather_condition(self, avg_temp, min_temp, max_temp, humidity, wind, month, recent_precip,
+                                    day_index):
+        """Enhanced weather condition determination with more nuanced descriptions"""
+
+        # Get climate zone for more accurate conditions
+        climate_zone = self.get_climate_zone(getattr(self, 'current_city', 'amman'))
+
+        # Temperature classification with climate context
+        temp_range = max_temp - min_temp
+
+        if climate_zone == 'desert':
+            # Desert climate adjustments
+            if avg_temp > 28:
+                temp_intensity = "Hot"
+                temp_feel = "warm" if avg_temp < 32 else "hot"
+            elif avg_temp > 22:
+                temp_intensity = "Pleasantly Warm"
+                temp_feel = "mild"
+            elif avg_temp > 16:
+                temp_intensity = "Mild"
+                temp_feel = "cool"
+            else:
+                temp_intensity = "Cool"
+                temp_feel = "chilly"
         else:
-            temp_intensity = "Extremely Cold"
-            temp_feel = "bitterly cold"
+            # Standard classification for other climates
+            if avg_temp > 25:
+                temp_intensity = "Warm"
+                temp_feel = "warm"
+            elif avg_temp > 20:
+                temp_intensity = "Pleasantly Warm"
+                temp_feel = "mild"
+            elif avg_temp > 15:
+                temp_intensity = "Mild"
+                temp_feel = "cool"
+            elif avg_temp > 10:
+                temp_intensity = "Cool"
+                temp_feel = "chilly"
+            else:
+                temp_intensity = "Cold"
+                temp_feel = "cold"
 
+        # Enhanced cloud cover based on humidity and climate
         cloud_cover = ""
         precipitation = ""
         special_conditions = []
 
-        if humidity > 85:
-            cloud_cover = "Overcast"
-            if avg_temp > 25:
-                precipitation = "Heavy Rain" if recent_precip > 5 else "Moderate Rain"
-            elif avg_temp > 10:
-                precipitation = "Steady Rain" if humidity > 90 else "Light Rain"
+        # Desert-specific cloud logic
+        if climate_zone == 'desert':
+            if humidity > 40:
+                cloud_cover = "Partly Cloudy"
+                if humidity > 60 and avg_temp > 20:
+                    precipitation = "Isolated Showers"
+            elif humidity > 25:
+                cloud_cover = "Mostly Clear"
             else:
-                precipitation = "Heavy Snow" if avg_temp < -2 else "Snow Showers"
-        elif humidity > 75:
-            cloud_cover = "Mostly Cloudy"
-            if recent_precip > 3:
-                precipitation = "Occasional Showers" if avg_temp > 5 else "Occasional Flurries"
-            else:
-                precipitation = "Drizzle" if avg_temp > 10 else "Light Snow"
-        elif humidity > 65:
-            cloud_cover = "Partly Cloudy"
-            if recent_precip > 2:
-                precipitation = "Isolated Showers" if avg_temp > 5 else "Isolated Snow"
-        elif humidity > 50:
-            cloud_cover = "Mostly Clear"
-            precipitation = ""
+                cloud_cover = "Clear"
         else:
-            cloud_cover = "Clear"
-            precipitation = ""
+            # Standard cloud logic
+            if humidity > 75:
+                cloud_cover = "Mostly Cloudy"
+            elif humidity > 60:
+                cloud_cover = "Partly Cloudy"
+            elif humidity > 45:
+                cloud_cover = "Mostly Clear"
+            else:
+                cloud_cover = "Clear"
 
+        # Wind description with climate context
         wind_description = ""
-        if wind > 50:
-            wind_description = "Storm-force Winds"
-            special_conditions.append("Gusty Conditions")
-        elif wind > 40:
-            wind_description = "Gale-force Winds"
-            special_conditions.append("Very Windy")
-        elif wind > 30:
-            wind_description = "Strong Winds"
-            special_conditions.append("Windy")
-        elif wind > 20:
+        if wind > 25:
+            wind_description = "Windy"
+            special_conditions.append("Breezy Conditions")
+        elif wind > 15:
             wind_description = "Moderate Breeze"
-        elif wind > 10:
+        elif wind > 8:
             wind_description = "Light Breeze"
         else:
             wind_description = "Calm"
 
-        temp_range = max_temp - min_temp
-        if temp_range > 15:
-            special_conditions.append("Large Temperature Swing")
-        elif temp_range > 10:
-            special_conditions.append("Significant Diurnal Variation")
+        # Temperature variation analysis
+        if temp_range > 12:
+            special_conditions.append("Large Daily Temperature Range")
+        elif temp_range > 8:
+            special_conditions.append("Noticeable Temperature Swing")
 
-        if is_summer and humidity > 75 and avg_temp > 28:
-            special_conditions.append("High Humidity")
-            temp_feel = "muggy and " + temp_feel
-        elif is_winter and avg_temp < 5 and humidity > 80:
-            special_conditions.append("Raw Cold")
-            temp_feel = "damp and " + temp_feel
-        elif is_spring and day_index < 3:
-            special_conditions.append("Spring Conditions")
-        elif is_fall and day_index > 4:
-            special_conditions.append("Autumn Conditions")
+        # Seasonal and climate-specific conditions
+        is_fall = month in [9, 10, 11]
+        is_spring = month in [3, 4, 5]
 
-        if cloud_cover in ["Clear", "Mostly Clear"] and is_summer:
-            special_conditions.append("High UV Index")
-        if humidity > 80 and avg_temp < 15:
-            special_conditions.append("Reduced Visibility")
-        elif humidity < 30:
+        if climate_zone == 'desert':
+            if humidity < 25:
+                special_conditions.append("Dry Conditions")
+            if temp_range > 10:
+                special_conditions.append("Desert Climate Pattern")
+
+        if is_fall and day_index > 2:
+            special_conditions.append("Autumn Weather")
+        elif is_spring and day_index < 4:
+            special_conditions.append("Springlike Conditions")
+
+        # Visibility and atmospheric conditions
+        if humidity < 30:
             special_conditions.append("Excellent Visibility")
+        elif humidity > 70:
+            special_conditions.append("Reduced Visibility")
 
-        if wind > 25 and humidity < 60:
-            special_conditions.append("High Pressure System")
-        elif humidity > 85 and wind < 15:
-            special_conditions.append("Low Pressure System")
+        if wind < 5 and cloud_cover == "Clear":
+            special_conditions.append("Calm and Clear")
 
-        condition_parts = []
-        condition_parts.append(temp_intensity)
+        # Build condition description
+        condition_parts = [temp_intensity]
 
+        # Add cloud cover
+        condition_parts.append(cloud_cover)
+
+        # Add precipitation if any
         if precipitation:
-            condition_parts.append(f"{cloud_cover} with {precipitation}")
-        else:
-            condition_parts.append(cloud_cover)
+            condition_parts.append(f"with {precipitation}")
 
+        # Add wind if significant
         if wind > 15:
             condition_parts.append(wind_description)
 
-        if special_conditions:
-            condition_parts.extend(special_conditions)
+        # Add special conditions (limit to 2 most relevant)
+        relevant_conditions = []
+        for condition in special_conditions:
+            if "Temperature" in condition or "Visibility" in condition or climate_zone in condition:
+                relevant_conditions.append(condition)
 
+        # Add up to 2 most relevant special conditions
+        condition_parts.extend(relevant_conditions[:2])
+
+        # Add temperature feel
         condition_parts.append(f"Feeling {temp_feel}")
 
+        # Create final description
         detailed_condition = ", ".join(condition_parts)
 
-        if len(detailed_condition) > 120:
-            parts = detailed_condition.split(", ")
-            essential_parts = parts[:4]
-            detailed_condition = ", ".join(essential_parts)
-
+        # Clean up and ensure proper formatting
         detailed_condition = detailed_condition.replace(" ,", ",")
         detailed_condition = " ".join(detailed_condition.split())
+
+        # Ensure reasonable length
+        if len(detailed_condition) > 100:
+            parts = detailed_condition.split(", ")
+            # Keep temperature, cloud cover, and 1-2 most important conditions
+            essential_parts = parts[:3] + [parts[-1]]  # Keep first 3 and feeling
+            detailed_condition = ", ".join(essential_parts)
 
         return detailed_condition.title()
 
     def generate_chart(self, predictions):
         """Generate weather prediction chart"""
         try:
+            # Extract data for plotting
             dates = [pred['date'] for pred in predictions]
             avg_temps = [pred['avg_temp'] for pred in predictions]
             min_temps = [pred['min_temp'] for pred in predictions]
@@ -642,8 +850,10 @@ class WeatherPredictor:
             humidity = [pred['humidity'] for pred in predictions]
             wind = [pred['wind'] for pred in predictions]
 
+            # Create the plot
             fig, axes = plt.subplots(3, 1, figsize=(12, 10))
 
+            # Temperature plot
             axes[0].plot(dates, avg_temps, 'r-o', label='Average', linewidth=2, markersize=6)
             axes[0].fill_between(dates, min_temps, max_temps, alpha=0.3, color='lightblue', label='Min-Max Range')
             axes[0].set_title('Temperature Forecast', fontsize=14, fontweight='bold')
@@ -652,12 +862,14 @@ class WeatherPredictor:
             axes[0].grid(True, alpha=0.3)
             plt.setp(axes[0].xaxis.get_majorticklabels(), rotation=45)
 
+            # Humidity plot
             axes[1].plot(dates, humidity, 'b-s', linewidth=2, markersize=6)
             axes[1].set_title('Humidity Forecast', fontsize=14, fontweight='bold')
             axes[1].set_ylabel('Humidity (%)')
             axes[1].grid(True, alpha=0.3)
             plt.setp(axes[1].xaxis.get_majorticklabels(), rotation=45)
 
+            # Wind plot
             axes[2].plot(dates, wind, 'g-^', linewidth=2, markersize=6)
             axes[2].set_title('Wind Speed Forecast', fontsize=14, fontweight='bold')
             axes[2].set_ylabel('Wind Speed (kph)')
@@ -667,6 +879,7 @@ class WeatherPredictor:
 
             plt.tight_layout()
 
+            # Convert plot to base64 string
             img = io.BytesIO()
             plt.savefig(img, format='png', dpi=150, bbox_inches='tight')
             img.seek(0)
