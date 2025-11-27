@@ -82,7 +82,7 @@ class ModelPerformance(db.Model):
     model_comparison = db.Column(db.JSON, nullable=True)  # Store all model results
     
 
-API_KEY = "059fd13e6c4f4e7e87f175154251311"
+API_KEY = "923f98fb4a5d4421adf171802252711"
 BASE_URL = "https://api.weatherapi.com/v1"
 
 # Keep-alive system
