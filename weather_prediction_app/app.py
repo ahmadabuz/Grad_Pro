@@ -256,18 +256,54 @@ class WeatherPredictor:
         df['week_of_year'] = df['date'].dt.isocalendar().week
         df['is_weekend'] = df['date'].dt.weekday >= 5
 
-        # Enhanced lag features with more variation
+        # 1. ENHANCED WIND FEATURE ENGINEERING
+        # Wind has different patterns than temperature - more random, less seasonal
+        df['wind_seasonal_factor'] = np.sin(2 * np.pi * df['day_of_year'] / 182.625)  # 6-month cycle for wind
+        df['wind_daily_cycle'] = np.sin(2 * np.pi * df['day_of_year'] / 365.25 * 4)  # Quarterly variations
+        
+        # Wind persistence features
+        df['wind_persistence'] = df['wind_kph'].shift(1) / (df['wind_kph'] + 0.1)
+        df['wind_change'] = df['wind_kph'].diff()
+        df['wind_change_abs'] = abs(df['wind_change'])
+        
+        # Wind volatility features
+        for window in [3, 7, 14]:
+            df[f'wind_volatility_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
+            df[f'wind_change_std_{window}'] = df['wind_change'].rolling(window=window, min_periods=1).std()
+
+        # Enhanced lag features with wind-specific lags
+        for lag in [1, 2, 3]:  # Wind has shorter memory than temperature
+            df[f'wind_kph_lag_{lag}'] = df['wind_kph'].shift(lag)
+            df[f'wind_change_lag_{lag}'] = df['wind_change'].shift(lag)
+
+        # Temperature lag features (keep your existing ones)
         for lag in [1, 2, 3, 5, 7, 10, 14]:
-            for col in ['avg_c', 'humidity', 'wind_kph', 'precip_mm']:
+            for col in ['avg_c', 'humidity', 'precip_mm']:  # Removed wind_kph from this loop
                 df[f'{col}_lag_{lag}'] = df[col].shift(lag)
 
-        # Rolling statistics with more windows
-        for window in [3, 5, 7, 10, 14]:
-            for col in ['avg_c', 'humidity', 'wind_kph', 'precip_mm']:
+        # Rolling statistics - wind-specific windows
+        for window in [3, 5, 7]:  # Shorter windows for wind (more variable)
+            df[f'wind_kph_rolling_mean_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).mean()
+            df[f'wind_kph_rolling_std_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
+            df[f'wind_kph_rolling_min_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).min()
+            df[f'wind_kph_rolling_max_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).max()
+
+        # Longer windows for temperature/humidity
+        for window in [7, 10, 14]:
+            for col in ['avg_c', 'humidity', 'precip_mm']:
                 df[f'{col}_rolling_mean_{window}'] = df[col].rolling(window=window, min_periods=1).mean()
                 df[f'{col}_rolling_std_{window}'] = df[col].rolling(window=window, min_periods=1).std()
-                df[f'{col}_rolling_min_{window}'] = df[col].rolling(window=window, min_periods=1).min()
-                df[f'{col}_rolling_max_{window}'] = df[col].rolling(window=window, min_periods=1).max()
+
+        # Pressure gradient simulation (wind driver)
+        df['temp_gradient'] = df['max_c'] - df['min_c']  # Larger gradient = more wind
+        df['humidity_pressure_effect'] = (100 - df['humidity']) * 0.1  # Lower humidity = higher pressure potential
+        
+        # Wind-specific interaction features
+        df['temp_wind_interaction'] = df['avg_c'] * df['wind_kph']
+        df['seasonal_wind_boost'] = df['wind_seasonal_factor'] * df['wind_kph']
+        
+        # Weather system features
+        df['weather_system_change'] = (df['avg_c'].diff(1) + df['humidity'].diff(1) + df['wind_kph'].diff(1)).abs()
 
         # Enhanced difference features
         for diff in [1, 2, 3, 7]:
@@ -304,7 +340,13 @@ class WeatherPredictor:
         # Fill missing values with more sophisticated method
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         for col in numeric_cols:
-            df[col] = df[col].fillna(method='ffill').fillna(method='bfill').fillna(df[col].mean())
+            if 'wind' in col:
+                # For wind features, use forward fill then random noise
+                df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+                if df[col].isna().any():
+                    df[col] = df[col].fillna(np.random.uniform(5, 15))  # Reasonable wind range
+            else:
+                df[col] = df[col].fillna(method='ffill').fillna(method='bfill').fillna(df[col].mean())
 
         return df
 
@@ -322,7 +364,7 @@ class WeatherPredictor:
         return (beta * gamma) / (alpha - gamma)
 
     def train_advanced_models(self, X_train, X_test, y_train, y_test):
-        """Enhanced model training with better hyperparameters"""
+        """3. ENHANCED MODEL TRAINING FOCUS with wind-focused evaluation"""
         models = {
             'ElasticNet': ElasticNet(alpha=0.1, l1_ratio=0.5, random_state=42, max_iter=5000),
             'Ridge': Ridge(alpha=1.0, random_state=42, max_iter=5000),
@@ -385,22 +427,33 @@ class WeatherPredictor:
 
                 print(f"{name}: R² Train = {r2_train:.4f}, R² Test = {r2_test:.4f}")
 
-                # Calculate metrics for each target
+                # Calculate metrics for each target - SPECIAL ATTENTION TO WIND
                 metrics = {}
-                for i, target_name in enumerate(['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']):
+                target_names = ['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']
+                
+                for i, target_name in enumerate(target_names):
+                    y_true_target = y_test[:, i]
+                    y_pred_target = y_pred[:, i]
+                    
                     metrics[target_name] = {
-                        'mae': mean_absolute_error(y_test[:, i], y_pred[:, i]),
-                        'rmse': np.sqrt(mean_squared_error(y_test[:, i], y_pred[:, i])),
-                        'r2': r2_score(y_test[:, i], y_pred[:, i])
+                        'mae': mean_absolute_error(y_true_target, y_pred_target),
+                        'rmse': np.sqrt(mean_squared_error(y_true_target, y_pred_target)),
+                        'r2': r2_score(y_true_target, y_pred_target)
                     }
+                    
+                    # Special wind validation
+                    if target_name == 'wind_kph':
+                        wind_metrics = self._validate_wind_predictions(y_true_target, y_pred_target)
+                        metrics[target_name].update(wind_metrics)
 
-                # Overall metrics
+                # Overall metrics with wind quality check
                 overall_metrics = {
                     'mae': np.mean([m['mae'] for m in metrics.values()]),
                     'rmse': np.mean([m['rmse'] for m in metrics.values()]),
                     'r2': np.mean([m['r2'] for m in metrics.values()]),
                     'model': trained_model,
-                    'detailed_metrics': metrics
+                    'detailed_metrics': metrics,
+                    'wind_quality_score': metrics['wind_kph'].get('quality_score', 0)
                 }
 
                 results[name] = overall_metrics
@@ -411,9 +464,46 @@ class WeatherPredictor:
 
         return results
 
+    def _validate_wind_predictions(self, y_true, y_pred):
+        """Validate that wind predictions are physically realistic"""
+        # Check for zero winds
+        zero_wind_count = np.sum(y_pred < 1.0)
+        zero_wind_ratio = zero_wind_count / len(y_pred)
+        
+        # Check wind range
+        realistic_range_ratio = np.sum((y_pred >= 2.0) & (y_pred <= 50.0)) / len(y_pred)
+        
+        # Check variance (wind should have some variation)
+        pred_variance = np.var(y_pred)
+        true_variance = np.var(y_true)
+        variance_ratio = pred_variance / (true_variance + 1e-8)
+        
+        quality_score = (
+            (1 - zero_wind_ratio) * 0.4 +
+            realistic_range_ratio * 0.3 +
+            min(1.0, variance_ratio) * 0.3
+        )
+        
+        return {
+            'zero_wind_ratio': zero_wind_ratio,
+            'realistic_range_ratio': realistic_range_ratio,
+            'variance_ratio': variance_ratio,
+            'quality_score': quality_score
+        }
+
     def add_realistic_variation(self, predictions, city):
         """Add realistic weather variations based on climate zone"""
         climate_zone = self.get_climate_zone(city)
+
+        # Climate-specific minimum winds
+        min_winds = {
+            'desert': 3.0,      # Deserts often have some breeze
+            'mediterranean': 5.0,
+            'temperate': 4.0,
+            'continental': 3.0,
+            'tropical': 2.0
+        }
+        min_wind = min_winds.get(climate_zone, 3.0)
 
         for i, pred in enumerate(predictions):
             # Add small random variations based on climate zone
@@ -440,9 +530,12 @@ class WeatherPredictor:
             humidity_variation = np.random.normal(0, factors['humidity_var'] * progress_factor)
             pred['humidity'] = round(max(10, min(95, pred['humidity'] + humidity_variation)), 1)
 
-            # Wind variation
-            wind_variation = np.random.normal(0, factors['wind_var'] * progress_factor)
-            pred['wind'] = round(max(0, pred['wind'] + wind_variation), 1)
+            # Enhanced wind variation with minimum
+            wind_variation = np.random.normal(0, 2.0)  # Base variation
+            wind_variation *= (0.5 + 0.5 * progress_factor)  # Increase variation over time
+            
+            new_wind = pred['wind'] + wind_variation
+            pred['wind'] = round(max(min_wind, new_wind), 1)  # Enforce minimum wind
 
             # Ensure logical relationships
             if pred['min_temp'] > pred['avg_temp']:
@@ -453,17 +546,30 @@ class WeatherPredictor:
         return predictions
 
     def create_future_features(self, last_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
-        """Enhanced future feature creation with better variation"""
+        """2. IMPROVED FUTURE FEATURE CREATION WITH WIND PHYSICS"""
         future_features_list = []
         last_features = df[feature_cols].iloc[-1:].to_dict('records')[0]
-        recent_data = df[['avg_c', 'humidity', 'wind_kph', 'precip_mm']].tail(20).to_dict('records')
+        recent_data = df[['avg_c', 'humidity', 'wind_kph', 'precip_mm']].tail(30).to_dict('records')
+        
+        climate_zone = self.get_climate_zone(getattr(self, 'current_city', 'amman'))
+        
+        # Climate-specific wind characteristics
+        wind_profiles = {
+            'desert': {'base': 8.0, 'variation': 4.0, 'seasonal_amp': 2.0},
+            'mediterranean': {'base': 12.0, 'variation': 6.0, 'seasonal_amp': 3.0},
+            'temperate': {'base': 15.0, 'variation': 8.0, 'seasonal_amp': 4.0},
+            'continental': {'base': 10.0, 'variation': 5.0, 'seasonal_amp': 3.0},
+            'tropical': {'base': 8.0, 'variation': 4.0, 'seasonal_amp': 2.0}
+        }
+        wind_profile = wind_profiles.get(climate_zone, wind_profiles['temperate'])
 
         for i in range(future_days):
             future_date = last_date + timedelta(days=i + 1)
             day_of_year = future_date.timetuple().tm_yday
 
-            # Update time-based features with enhanced variations
             current_features = last_features.copy()
+            
+            # Time features
             current_features['day_of_year'] = day_of_year
             current_features['day_sin'] = np.sin(2 * np.pi * day_of_year / 365.25)
             current_features['day_cos'] = np.cos(2 * np.pi * day_of_year / 365.25)
@@ -474,71 +580,109 @@ class WeatherPredictor:
             current_features['is_winter'] = future_date.month in [12, 1, 2]
             current_features['is_spring'] = future_date.month in [3, 4, 5]
             current_features['is_fall'] = future_date.month in [9, 10, 11]
-
-            # Add seasonal transition
-            current_features['season_transition'] = abs(future_date.month - 3) if future_date.month in [2, 3, 4] else \
-                abs(future_date.month - 6) if future_date.month in [5, 6, 7] else \
-                    abs(future_date.month - 9) if future_date.month in [8, 9, 10] else \
-                        abs(future_date.month - 12) if future_date.month in [11, 12, 1] else 0
-
-            # Convert to DataFrame for scaling and prediction
+            
+            # WIND-SPECIFIC TIME FEATURES
+            current_features['wind_seasonal_factor'] = np.sin(2 * np.pi * day_of_year / 182.625)
+            current_features['wind_daily_cycle'] = np.sin(2 * np.pi * day_of_year / 365.25 * 4)
+            
+            # Seasonal wind patterns
+            seasonal_multiplier = 1.0
+            if future_date.month in [11, 12, 1, 2]:  # Winter - typically windier
+                seasonal_multiplier = 1.3
+            elif future_date.month in [5, 6, 7, 8]:  # Summer - variable
+                seasonal_multiplier = 0.9 if climate_zone == 'desert' else 1.1
+                
+            # Generate realistic wind base with physics
+            base_wind = wind_profile['base'] * seasonal_multiplier
+            seasonal_variation = wind_profile['seasonal_amp'] * current_features['wind_seasonal_factor']
+            random_variation = np.random.normal(0, wind_profile['variation'])
+            
+            # Combine components for realistic wind
+            realistic_wind = max(3.0, base_wind + seasonal_variation + random_variation)
+            
+            # Update wind features with realistic patterns
+            self._update_wind_features(current_features, realistic_wind, recent_data, feature_cols)
+            
+            # Convert to DataFrame for prediction
             current_features_df = pd.DataFrame([current_features])[feature_cols]
             current_features_scaled = scaler_X.transform(current_features_df.values)
             predicted_scaled = best_model.predict(current_features_scaled)
             predicted_original = scaler_y.inverse_transform(predicted_scaled)
 
-            # Update the recent_data with the new prediction
+            # Store prediction and update recent data
             predicted_data = {
                 'avg_c': predicted_original[0][0],
                 'min_c': predicted_original[0][1],
                 'max_c': predicted_original[0][2],
                 'humidity': predicted_original[0][3],
-                'wind_kph': predicted_original[0][4]
+                'wind_kph': max(3.0, predicted_original[0][4])  # Logical minimum
             }
             recent_data.append(predicted_data)
-            recent_data = recent_data[-20:]  # Keep recent context
-
-            # Create a temporary DataFrame from recent_data to calculate updated features
-            temp_recent_df = pd.DataFrame(recent_data)
-
-            # Enhanced feature recalculation with noise for variation
-            for lag in [1, 2, 3, 7, 14]:
-                for col in ['avg_c', 'humidity', 'wind_kph']:
-                    lag_col_name = f'{col}_lag_{lag}'
-                    if lag_col_name in feature_cols:
-                        if len(temp_recent_df) > lag:
-                            lag_value = temp_recent_df[col].shift(lag).iloc[-1]
-                            # Add small noise to prevent over-smoothing
-                            if not pd.isna(lag_value):
-                                noise = np.random.normal(0, 0.1) if col == 'avg_c' else np.random.normal(0, 0.5)
-                                current_features[lag_col_name] = lag_value + noise
-                        else:
-                            current_features[lag_col_name] = current_features.get(lag_col_name, 0)
-
-            for window in [3, 7, 14]:
-                for col in ['avg_c', 'humidity', 'wind_kph']:
-                    rolling_mean_col_name = f'{col}_rolling_mean_{window}'
-                    rolling_std_col_name = f'{col}_rolling_std_{window}'
-
-                    if rolling_mean_col_name in feature_cols and len(temp_recent_df) >= window:
-                        rolling_mean_value = temp_recent_df[col].rolling(window=window).mean().iloc[-1]
-                        if not pd.isna(rolling_mean_value):
-                            current_features[rolling_mean_col_name] = rolling_mean_value
-
-                    if rolling_std_col_name in feature_cols and len(temp_recent_df) >= window:
-                        rolling_std_value = temp_recent_df[col].rolling(window=window).std().iloc[-1]
-                        if not pd.isna(rolling_std_value):
-                            current_features[rolling_std_col_name] = rolling_std_value
-
-            # Recalculate interaction features
-            current_features['temp_humidity_interaction'] = predicted_data['avg_c'] * (predicted_data['humidity'] / 100)
-            current_features['temp_wind_interaction'] = predicted_data['avg_c'] * predicted_data['wind_kph']
-
-            # Store the updated features
+            recent_data = recent_data[-30:]
+            
+            # Update features for next iteration with wind-aware propagation
+            self._propagate_features(current_features, predicted_data, recent_data, feature_cols, climate_zone)
+            
             future_features_list.append(pd.DataFrame([current_features])[feature_cols].values.flatten())
             last_features = current_features
 
         return np.array(future_features_list)
+
+    def _update_wind_features(self, features, realistic_wind, recent_data, feature_cols):
+        """Update wind-specific features with realistic patterns"""
+        # Update wind lag features
+        for lag in [1, 2, 3]:
+            wind_lag_col = f'wind_kph_lag_{lag}'
+            if wind_lag_col in features:
+                if len(recent_data) > lag:
+                    # Use actual recent data when available
+                    features[wind_lag_col] = recent_data[-lag]['wind_kph']
+                else:
+                    # Initialize with realistic wind
+                    features[wind_lag_col] = realistic_wind * (0.8 + 0.4 * np.random.random())
+        
+        # Update wind rolling features
+        temp_df = pd.DataFrame(recent_data)
+        for window in [3, 5, 7]:
+            for stat in ['mean', 'std', 'min', 'max']:
+                wind_roll_col = f'wind_kph_rolling_{stat}_{window}'
+                if wind_roll_col in features and len(temp_df) >= window:
+                    if stat == 'mean':
+                        value = temp_df['wind_kph'].rolling(window=window).mean().iloc[-1]
+                    elif stat == 'std':
+                        value = temp_df['wind_kph'].rolling(window=window).std().iloc[-1]
+                    elif stat == 'min':
+                        value = temp_df['wind_kph'].rolling(window=window).min().iloc[-1]
+                    else:  # max
+                        value = temp_df['wind_kph'].rolling(window=window).max().iloc[-1]
+                    
+                    if not pd.isna(value):
+                        features[wind_roll_col] = value
+        
+        # Update wind volatility features
+        if len(recent_data) > 1:
+            wind_changes = [recent_data[i]['wind_kph'] - recent_data[i-1]['wind_kph'] 
+                           for i in range(1, len(recent_data))]
+            if wind_changes:
+                features['wind_change'] = wind_changes[-1]
+                features['wind_change_abs'] = abs(wind_changes[-1])
+
+    def _propagate_features(self, features, predicted_data, recent_data, feature_cols, climate_zone):
+        """Propagate features for next time step with wind awareness"""
+        temp_df = pd.DataFrame(recent_data)
+        
+        # Update temperature and humidity features
+        for col in ['avg_c', 'humidity']:
+            for lag in [1, 2, 3, 7]:
+                lag_col = f'{col}_lag_{lag}'
+                if lag_col in features and len(temp_df) > lag:
+                    lag_value = temp_df[col].shift(lag).iloc[-1]
+                    if not pd.isna(lag_value):
+                        features[lag_col] = lag_value
+        
+        # Update interaction features
+        features['temp_wind_interaction'] = predicted_data['avg_c'] * predicted_data['wind_kph']
+        features['temp_gradient'] = predicted_data['max_c'] - predicted_data['min_c']
 
     def predict_weather(self, days=7):
         """Generate weather predictions with enhanced realism"""
@@ -576,7 +720,7 @@ class WeatherPredictor:
             predictions_df['min_temp'] = predictions_df['min_temp'].clip(-50, 50)
             predictions_df['max_temp'] = predictions_df['max_temp'].clip(-50, 50)
             predictions_df['avg_temp'] = predictions_df['avg_temp'].clip(-50, 50)
-            predictions_df['wind'] = predictions_df['wind'].clip(0, 150)
+            predictions_df['wind'] = predictions_df['wind'].clip(2.0, 150)  # Increased minimum wind
 
             # Ensure logical temperature relationships
             for i, row in predictions_df.iterrows():
@@ -671,18 +815,22 @@ class WeatherPredictor:
             if not self.results:
                 return {"error": "No models trained successfully"}
 
-            # Find best model
-            best_r2 = -np.inf
+            # Find best model considering both overall R² and wind quality
+            best_score = -np.inf
             for name, result in self.results.items():
-                if result['r2'] > best_r2:
-                    best_r2 = result['r2']
+                # Combine R² score with wind quality
+                wind_quality = result.get('wind_quality_score', 0.5)
+                combined_score = result['r2'] * 0.7 + wind_quality * 0.3
+                
+                if combined_score > best_score:
+                    best_score = combined_score
                     self.best_model_name = name
 
             # Use the best model
             self.model = self.results[self.best_model_name]['model']
 
-            print(f"Best model: {self.best_model_name} with R²: {best_r2:.4f}")
-            return {"success": True, "best_model": self.best_model_name, "r2_score": best_r2}
+            print(f"Best model: {self.best_model_name} with combined score: {best_score:.4f}")
+            return {"success": True, "best_model": self.best_model_name, "r2_score": best_score}
 
         except Exception as e:
             return {"error": str(e)}
