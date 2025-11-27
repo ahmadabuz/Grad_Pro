@@ -33,6 +33,7 @@ from flask import make_response
 
 app = Flask(__name__)
 
+
 # POSTGRESQL DATABASE CONFIGURATION - THIS WILL PERSIST!
 def get_database_uri():
     if 'RENDER' in os.environ:
@@ -46,11 +47,13 @@ def get_database_uri():
         # fallback to sqlit (not efficient , as it will lose all new data if you deployed after making new commmit )
         return "sqlite:///weather_predictions.db"
 
+
 app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
 app.config["SQLALCHEMY_ECHO"] = False
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
+
 
 # Define models AFTER db initialization
 class Prediction(db.Model):
@@ -69,6 +72,7 @@ class Prediction(db.Model):
     is_current = db.Column(db.Boolean, default=True)
     version = db.Column(db.Integer, default=1)
 
+
 class ModelPerformance(db.Model):
     __tablename__ = "model_performance"
     id = db.Column(db.Integer, primary_key=True)
@@ -80,17 +84,18 @@ class ModelPerformance(db.Model):
     rmse = db.Column(db.Float, nullable=False)
     detailed_metrics = db.Column(db.JSON, nullable=False)
     model_comparison = db.Column(db.JSON, nullable=True)  # Store all model results
-    
+
 
 API_KEY = "923f98fb4a5d4421adf171802252711"
 BASE_URL = "https://api.weatherapi.com/v1"
+
 
 # Keep-alive system
 class KeepAliveManager:
     def __init__(self):
         self.enabled = 'RENDER' in os.environ
         self.app_url = "https://skysense-20a1.onrender.com"
-        
+
     def ping_self(self):
         """Ping the health endpoint"""
         try:
@@ -100,25 +105,27 @@ class KeepAliveManager:
         except Exception as e:
             print(f"KeepAlive: Ping failed - {e}")
             return False
-    
+
     def start_keep_alive(self):
         """Start the keep-alive system"""
         if not self.enabled:
             print("KeepAlive: Running locally, no need for keep-alive")
             return
-            
+
         print(f"KeepAlive: Starting for {self.app_url}")
         ping_thread = threading.Thread(target=self._keep_alive_loop, daemon=True)
         ping_thread.start()
-    
+
     def _keep_alive_loop(self):
         """Background loop to keep the app alive"""
         while True:
             self.ping_self()
             time.sleep(600)  # 10 minutes
 
+
 # Create keep-alive manager instance
 keep_alive_manager = KeepAliveManager()
+
 
 class WeatherPredictor:
     def __init__(self):
@@ -261,19 +268,19 @@ class WeatherPredictor:
         df['wind_persistence'] = df['wind_kph'].shift(1) / (df['wind_kph'] + 0.1)
         df['wind_change'] = df['wind_kph'].diff()
         df['wind_change_abs'] = abs(df['wind_change'])
-        # Wind volatility features 
+        # Wind volatility features
         for window in [3, 7, 14]:
             df[f'wind_volatility_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
             df[f'wind_change_std_{window}'] = df['wind_change'].rolling(window=window, min_periods=1).std()
-            
-        for lag in [1, 2, 3]:  
+
+        for lag in [1, 2, 3]:
             df[f'wind_kph_lag_{lag}'] = df['wind_kph'].shift(lag)
             df[f'wind_change_lag_{lag}'] = df['wind_change'].shift(lag)
-            
+
         for lag in [1, 2, 3, 5, 7, 10, 14]:
-            for col in ['avg_c', 'humidity', 'precip_mm']:  
+            for col in ['avg_c', 'humidity', 'precip_mm']:
                 df[f'{col}_lag_{lag}'] = df[col].shift(lag)
-        
+
         for window in [3, 5, 7]:
             df[f'wind_kph_rolling_mean_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).mean()
             df[f'wind_kph_rolling_std_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
@@ -292,7 +299,7 @@ class WeatherPredictor:
         df['seasonal_wind_boost'] = df['wind_seasonal_factor'] * df['wind_kph']
         # Weather system features
         df['weather_system_change'] = (df['avg_c'].diff(1) + df['humidity'].diff(1) + df['wind_kph'].diff(1)).abs()
-         # Fill missing values with wind-appropriate methods
+        # Fill missing values with wind-appropriate methods
         numeric_cols = df.select_dtypes(include=[np.number]).columns
         for col in numeric_cols:
             if 'wind' in col:
@@ -302,13 +309,7 @@ class WeatherPredictor:
                     df[col] = df[col].fillna(np.random.uniform(5, 15))  # Reasonable wind range
             else:
                 df[col] = df[col].fillna(method='ffill').fillna(method='bfill').fillna(df[col].mean())
-        return df    
-
-
-
-            
-    
-    
+        return df
 
     def calculate_heat_index(self, temp, humidity):
         """Calculate heat index for realistic temperature perception"""
@@ -324,126 +325,154 @@ class WeatherPredictor:
         return (beta * gamma) / (alpha - gamma)
 
     def train_advanced_models(self, X_train, X_test, y_train, y_test):
-    """Enhanced model training with wind-focused evaluation"""
-    models = {
-        'ElasticNet': ElasticNet(alpha=0.1, l1_ratio=0.5, random_state=42, max_iter=5000),
-        'Ridge': Ridge(alpha=1.0, random_state=42, max_iter=5000),
-        'Lasso': Lasso(alpha=0.05, random_state=42, max_iter=5000),
-        'RandomForest': RandomForestRegressor(
-            n_estimators=200,
-            max_depth=15,
-            min_samples_split=5,
-            min_samples_leaf=2,
-            max_features='sqrt',
-            random_state=42,
-            n_jobs=-1
-        ),
-        'GradientBoosting': GradientBoostingRegressor(
-            n_estimators=150,
-            learning_rate=0.08,
-            max_depth=6,
-            min_samples_split=10,
-            random_state=42
-        ),
-        'XGBoost': xgb.XGBRegressor(
-            n_estimators=150,
-            learning_rate=0.1,
-            max_depth=8,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42,
-            n_jobs=-1
-        ),
-        'LightGBM': lgb.LGBMRegressor(
-            n_estimators=150,
-            learning_rate=0.1,
-            max_depth=8,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42,
-            n_jobs=-1
-        ),
-    }
+        """Enhanced model training with wind-focused evaluation"""
+        models = {
+            'ElasticNet': ElasticNet(alpha=0.1, l1_ratio=0.5, random_state=42, max_iter=5000),
+            'Ridge': Ridge(alpha=1.0, random_state=42, max_iter=5000),
+            'Lasso': Lasso(alpha=0.05, random_state=42, max_iter=5000),
+            'RandomForest': RandomForestRegressor(
+                n_estimators=200,
+                max_depth=15,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                max_features='sqrt',
+                random_state=42,
+                n_jobs=-1
+            ),
+            'GradientBoosting': GradientBoostingRegressor(
+                n_estimators=150,
+                learning_rate=0.08,
+                max_depth=6,
+                min_samples_split=10,
+                random_state=42
+            ),
+            'XGBoost': xgb.XGBRegressor(
+                n_estimators=150,
+                learning_rate=0.1,
+                max_depth=8,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                n_jobs=-1
+            ),
+            'LightGBM': lgb.LGBMRegressor(
+                n_estimators=150,
+                learning_rate=0.1,
+                max_depth=8,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                n_jobs=-1
+            ),
+        }
 
-    results = {}
+        results = {}
 
-    for name, model in models.items():
-        try:
-            if name in ['ElasticNet', 'Ridge', 'Lasso', 'GradientBoosting', 'XGBoost', 'LightGBM']:
-                multi_model = MultiOutputRegressor(model, n_jobs=1)
-                multi_model.fit(X_train, y_train)
-                y_pred_train = multi_model.predict(X_train)
-                y_pred = multi_model.predict(X_test)
-                trained_model = multi_model
-            else:
-                model.fit(X_train, y_train)
-                y_pred_train = model.predict(X_train)
-                y_pred = model.predict(X_test)
-                trained_model = model
+        for name, model in models.items():
+            try:
+                if name in ['ElasticNet', 'Ridge', 'Lasso', 'GradientBoosting', 'XGBoost', 'LightGBM']:
+                    multi_model = MultiOutputRegressor(model, n_jobs=1)
+                    multi_model.fit(X_train, y_train)
+                    y_pred_train = multi_model.predict(X_train)
+                    y_pred = multi_model.predict(X_test)
+                    trained_model = multi_model
+                else:
+                    model.fit(X_train, y_train)
+                    y_pred_train = model.predict(X_train)
+                    y_pred = model.predict(X_test)
+                    trained_model = model
 
-            # Calculate metrics with WIND-SPECIFIC evaluation
-            r2_train = r2_score(y_train, y_pred_train)
-            r2_test = r2_score(y_test, y_pred)
+                # Calculate metrics with WIND-SPECIFIC evaluation
+                r2_train = r2_score(y_train, y_pred_train)
+                r2_test = r2_score(y_test, y_pred)
 
-            print(f"{name}: R² Train = {r2_train:.4f}, R² Test = {r2_test:.4f}")
+                print(f"{name}: R² Train = {r2_train:.4f}, R² Test = {r2_test:.4f}")
 
-            # Calculate metrics for each target - SPECIAL ATTENTION TO WIND
-            metrics = {}
-            target_names = ['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']
-            
-            for i, target_name in enumerate(target_names):
-                y_true_target = y_test[:, i]
-                y_pred_target = y_pred[:, i]
-                
-                metrics[target_name] = {
-                    'mae': mean_absolute_error(y_true_target, y_pred_target),
-                    'rmse': np.sqrt(mean_squared_error(y_true_target, y_pred_target)),
-                    'r2': r2_score(y_true_target, y_pred_target)
+                # Calculate metrics for each target - SPECIAL ATTENTION TO WIND
+                metrics = {}
+                target_names = ['avg_c', 'min_c', 'max_c', 'humidity', 'wind_kph']
+
+                for i, target_name in enumerate(target_names):
+                    y_true_target = y_test[:, i]
+                    y_pred_target = y_pred[:, i]
+
+                    metrics[target_name] = {
+                        'mae': mean_absolute_error(y_true_target, y_pred_target),
+                        'rmse': np.sqrt(mean_squared_error(y_true_target, y_pred_target)),
+                        'r2': r2_score(y_true_target, y_pred_target)
+                    }
+
+                    # Special wind validation
+                    if target_name == 'wind_kph':
+                        wind_metrics = self._validate_wind_predictions(y_true_target, y_pred_target)
+                        metrics[target_name].update(wind_metrics)
+
+                # Overall metrics with wind quality check
+                overall_metrics = {
+                    'mae': np.mean([m['mae'] for m in metrics.values()]),
+                    'rmse': np.mean([m['rmse'] for m in metrics.values()]),
+                    'r2': np.mean([m['r2'] for m in metrics.values()]),
+                    'model': trained_model,
+                    'detailed_metrics': metrics,
+                    'wind_quality_score': metrics['wind_kph'].get('quality_score', 0)
                 }
-                
-                # Special wind validation
-                if target_name == 'wind_kph':
-                    wind_metrics = self._validate_wind_predictions(y_true_target, y_pred_target)
-                    metrics[target_name].update(wind_metrics)
 
-            # Overall metrics with wind quality check
-            overall_metrics = {
-                'mae': np.mean([m['mae'] for m in metrics.values()]),
-                'rmse': np.mean([m['rmse'] for m in metrics.values()]),
-                'r2': np.mean([m['r2'] for m in metrics.values()]),
-                'model': trained_model,
-                'detailed_metrics': metrics,
-                'wind_quality_score': metrics['wind_kph'].get('quality_score', 0)
-            }
+                results[name] = overall_metrics
 
-            results[name] = overall_metrics
+            except Exception as e:
+                print(f"Error training {name}: {e}")
+                continue
 
-        except Exception as e:
-            print(f"Error training {name}: {e}")
-            continue
+        return results
 
-    return results
+    def _validate_wind_predictions(self, y_true, y_pred):
+        """Validate that wind predictions are physically realistic"""
+        # Check for zero winds
+        zero_wind_count = np.sum(y_pred < 1.0)
+        zero_wind_ratio = zero_wind_count / len(y_pred)
+
+        # Check wind range
+        realistic_range_ratio = np.sum((y_pred >= 2.0) & (y_pred <= 50.0)) / len(y_pred)
+
+        # Check variance (wind should have some variation)
+        pred_variance = np.var(y_pred)
+        true_variance = np.var(y_true)
+        variance_ratio = pred_variance / (true_variance + 1e-8)
+
+        quality_score = (
+                (1 - zero_wind_ratio) * 0.4 +
+                realistic_range_ratio * 0.3 +
+                min(1.0, variance_ratio) * 0.3
+        )
+
+        return {
+            'zero_wind_ratio': zero_wind_ratio,
+            'realistic_range_ratio': realistic_range_ratio,
+            'variance_ratio': variance_ratio,
+            'quality_score': quality_score
+        }
+
 
 def _validate_wind_predictions(self, y_true, y_pred):
     """Validate that wind predictions are physically realistic"""
     # Check for zero winds
     zero_wind_count = np.sum(y_pred < 1.0)
     zero_wind_ratio = zero_wind_count / len(y_pred)
-    
+
     # Check wind range
     realistic_range_ratio = np.sum((y_pred >= 2.0) & (y_pred <= 50.0)) / len(y_pred)
-    
+
     # Check variance (wind should have some variation)
     pred_variance = np.var(y_pred)
     true_variance = np.var(y_true)
     variance_ratio = pred_variance / (true_variance + 1e-8)
-    
+
     quality_score = (
-        (1 - zero_wind_ratio) * 0.4 +
-        realistic_range_ratio * 0.3 +
-        min(1.0, variance_ratio) * 0.3
+            (1 - zero_wind_ratio) * 0.4 +
+            realistic_range_ratio * 0.3 +
+            min(1.0, variance_ratio) * 0.3
     )
-    
+
     return {
         'zero_wind_ratio': zero_wind_ratio,
         'realistic_range_ratio': realistic_range_ratio,
@@ -493,83 +522,140 @@ def _validate_wind_predictions(self, y_true, y_pred):
         return predictions
 
     def create_future_features(self, last_date, future_days, df, feature_cols, best_model, scaler_X, scaler_y):
-    """Enhanced future feature creation with wind physics"""
-    future_features_list = []
-    last_features = df[feature_cols].iloc[-1:].to_dict('records')[0]
-    recent_data = df[['avg_c', 'humidity', 'wind_kph', 'precip_mm']].tail(30).to_dict('records')
-    
-    climate_zone = self.get_climate_zone(getattr(self, 'current_city', 'amman'))
-    
-    # Climate-specific wind characteristics
-    wind_profiles = {
-        'desert': {'base': 8.0, 'variation': 4.0, 'seasonal_amp': 2.0},
-        'mediterranean': {'base': 12.0, 'variation': 6.0, 'seasonal_amp': 3.0},
-        'temperate': {'base': 15.0, 'variation': 8.0, 'seasonal_amp': 4.0},
-        'continental': {'base': 10.0, 'variation': 5.0, 'seasonal_amp': 3.0},
-        'tropical': {'base': 8.0, 'variation': 4.0, 'seasonal_amp': 2.0}
-    }
-    wind_profile = wind_profiles.get(climate_zone, wind_profiles['temperate'])
+        """Enhanced future feature creation with wind physics"""
+        future_features_list = []
+        last_features = df[feature_cols].iloc[-1:].to_dict('records')[0]
+        recent_data = df[['avg_c', 'humidity', 'wind_kph', 'precip_mm']].tail(30).to_dict('records')
 
-    for i in range(future_days):
-        future_date = last_date + timedelta(days=i + 1)
-        day_of_year = future_date.timetuple().tm_yday
+        climate_zone = self.get_climate_zone(getattr(self, 'current_city', 'amman'))
 
-        current_features = last_features.copy()
-        
-        # Time features
-        current_features['day_of_year'] = day_of_year
-        current_features['day_sin'] = np.sin(2 * np.pi * day_of_year / 365.25)
-        current_features['day_cos'] = np.cos(2 * np.pi * day_of_year / 365.25)
-        current_features['month'] = future_date.month
-        current_features['week_of_year'] = future_date.isocalendar().week
-        current_features['is_weekend'] = future_date.weekday() >= 5
-        
-        # WIND-SPECIFIC TIME FEATURES
-        current_features['wind_seasonal_factor'] = np.sin(2 * np.pi * day_of_year / 182.625)
-        current_features['wind_daily_cycle'] = np.sin(2 * np.pi * day_of_year / 365.25 * 4)
-        
-        # Seasonal wind patterns
-        seasonal_multiplier = 1.0
-        if future_date.month in [11, 12, 1, 2]:  # Winter - typically windier
-            seasonal_multiplier = 1.3
-        elif future_date.month in [5, 6, 7, 8]:  # Summer - variable
-            seasonal_multiplier = 0.9 if climate_zone == 'desert' else 1.1
-            
-        # Generate realistic wind base with physics
-        base_wind = wind_profile['base'] * seasonal_multiplier
-        seasonal_variation = wind_profile['seasonal_amp'] * current_features['wind_seasonal_factor']
-        random_variation = np.random.normal(0, wind_profile['variation'])
-        
-        # Combine components for realistic wind
-        realistic_wind = max(3.0, base_wind + seasonal_variation + random_variation)
-        
-        # Update wind features with realistic patterns
-        self._update_wind_features(current_features, realistic_wind, recent_data, feature_cols)
-        
-        # Convert to DataFrame for prediction
-        current_features_df = pd.DataFrame([current_features])[feature_cols]
-        current_features_scaled = scaler_X.transform(current_features_df.values)
-        predicted_scaled = best_model.predict(current_features_scaled)
-        predicted_original = scaler_y.inverse_transform(predicted_scaled)
-
-        # Store prediction and update recent data
-        predicted_data = {
-            'avg_c': predicted_original[0][0],
-            'min_c': predicted_original[0][1],
-            'max_c': predicted_original[0][2],
-            'humidity': predicted_original[0][3],
-            'wind_kph': max(3.0, predicted_original[0][4])  # Logical minimum
+        # Climate-specific wind characteristics
+        wind_profiles = {
+            'desert': {'base': 8.0, 'variation': 4.0, 'seasonal_amp': 2.0},
+            'mediterranean': {'base': 12.0, 'variation': 6.0, 'seasonal_amp': 3.0},
+            'temperate': {'base': 15.0, 'variation': 8.0, 'seasonal_amp': 4.0},
+            'continental': {'base': 10.0, 'variation': 5.0, 'seasonal_amp': 3.0},
+            'tropical': {'base': 8.0, 'variation': 4.0, 'seasonal_amp': 2.0}
         }
-        recent_data.append(predicted_data)
-        recent_data = recent_data[-30:]
-        
-        # Update features for next iteration with wind-aware propagation
-        self._propagate_features(current_features, predicted_data, recent_data, feature_cols, climate_zone)
-        
-        future_features_list.append(pd.DataFrame([current_features])[feature_cols].values.flatten())
-        last_features = current_features
+        wind_profile = wind_profiles.get(climate_zone, wind_profiles['temperate'])
 
-    return np.array(future_features_list)
+        for i in range(future_days):
+            future_date = last_date + timedelta(days=i + 1)
+            day_of_year = future_date.timetuple().tm_yday
+
+            current_features = last_features.copy()
+
+            # Time features
+            current_features['day_of_year'] = day_of_year
+            current_features['day_sin'] = np.sin(2 * np.pi * day_of_year / 365.25)
+            current_features['day_cos'] = np.cos(2 * np.pi * day_of_year / 365.25)
+            current_features['month'] = future_date.month
+            current_features['week_of_year'] = future_date.isocalendar().week
+            current_features['is_weekend'] = future_date.weekday() >= 5
+
+            # WIND-SPECIFIC TIME FEATURES
+            current_features['wind_seasonal_factor'] = np.sin(2 * np.pi * day_of_year / 182.625)
+            current_features['wind_daily_cycle'] = np.sin(2 * np.pi * day_of_year / 365.25 * 4)
+
+            # Seasonal wind patterns
+            seasonal_multiplier = 1.0
+            if future_date.month in [11, 12, 1, 2]:  # Winter - typically windier
+                seasonal_multiplier = 1.3
+            elif future_date.month in [5, 6, 7, 8]:  # Summer - variable
+                seasonal_multiplier = 0.9 if climate_zone == 'desert' else 1.1
+
+            # Generate realistic wind base with physics
+            base_wind = wind_profile['base'] * seasonal_multiplier
+            seasonal_variation = wind_profile['seasonal_amp'] * current_features['wind_seasonal_factor']
+            random_variation = np.random.normal(0, wind_profile['variation'])
+
+            # Combine components for realistic wind
+            realistic_wind = max(3.0, base_wind + seasonal_variation + random_variation)
+
+            # Update wind features with realistic patterns
+            self._update_wind_features(current_features, realistic_wind, recent_data, feature_cols)
+
+            # Convert to DataFrame for prediction
+            current_features_df = pd.DataFrame([current_features])[feature_cols]
+            current_features_scaled = scaler_X.transform(current_features_df.values)
+            predicted_scaled = best_model.predict(current_features_scaled)
+            predicted_original = scaler_y.inverse_transform(predicted_scaled)
+
+            # Store prediction and update recent data
+            predicted_data = {
+                'avg_c': predicted_original[0][0],
+                'min_c': predicted_original[0][1],
+                'max_c': predicted_original[0][2],
+                'humidity': predicted_original[0][3],
+                'wind_kph': max(3.0, predicted_original[0][4])  # Logical minimum
+            }
+            recent_data.append(predicted_data)
+            recent_data = recent_data[-30:]
+
+            # Update features for next iteration with wind-aware propagation
+            self._propagate_features(current_features, predicted_data, recent_data, feature_cols, climate_zone)
+
+            future_features_list.append(pd.DataFrame([current_features])[feature_cols].values.flatten())
+            last_features = current_features
+
+        return np.array(future_features_list)
+
+    def _update_wind_features(self, features, realistic_wind, recent_data, feature_cols):
+        """Update wind-specific features with realistic patterns"""
+        # Update wind lag features
+        for lag in [1, 2, 3]:
+            wind_lag_col = f'wind_kph_lag_{lag}'
+            if wind_lag_col in features:
+                if len(recent_data) > lag:
+                    # Use actual recent data when available
+                    features[wind_lag_col] = recent_data[-lag]['wind_kph']
+                else:
+                    # Initialize with realistic wind
+                    features[wind_lag_col] = realistic_wind * (0.8 + 0.4 * np.random.random())
+
+        # Update wind rolling features
+        temp_df = pd.DataFrame(recent_data)
+        for window in [3, 5, 7]:
+            for stat in ['mean', 'std', 'min', 'max']:
+                wind_roll_col = f'wind_kph_rolling_{stat}_{window}'
+                if wind_roll_col in features and len(temp_df) >= window:
+                    if stat == 'mean':
+                        value = temp_df['wind_kph'].rolling(window=window).mean().iloc[-1]
+                    elif stat == 'std':
+                        value = temp_df['wind_kph'].rolling(window=window).std().iloc[-1]
+                    elif stat == 'min':
+                        value = temp_df['wind_kph'].rolling(window=window).min().iloc[-1]
+                    else:  # max
+                        value = temp_df['wind_kph'].rolling(window=window).max().iloc[-1]
+
+                    if not pd.isna(value):
+                        features[wind_roll_col] = value
+
+        # Update wind volatility features
+        if len(recent_data) > 1:
+            wind_changes = [recent_data[i]['wind_kph'] - recent_data[i - 1]['wind_kph']
+                            for i in range(1, len(recent_data))]
+            if wind_changes:
+                features['wind_change'] = wind_changes[-1]
+                features['wind_change_abs'] = abs(wind_changes[-1])
+
+    def _propagate_features(self, features, predicted_data, recent_data, feature_cols, climate_zone):
+        """Propagate features for next time step with wind awareness"""
+        temp_df = pd.DataFrame(recent_data)
+
+        # Update temperature and humidity features (your existing logic)
+        for col in ['avg_c', 'humidity']:
+            for lag in [1, 2, 3, 7]:
+                lag_col = f'{col}_lag_{lag}'
+                if lag_col in features and len(temp_df) > lag:
+                    lag_value = temp_df[col].shift(lag).iloc[-1]
+                    if not pd.isna(lag_value):
+                        features[lag_col] = lag_value
+
+        # Update interaction features
+        features['temp_wind_interaction'] = predicted_data['avg_c'] * predicted_data['wind_kph']
+        features['temp_gradient'] = predicted_data['max_c'] - predicted_data['min_c']
+
 
 def _update_wind_features(self, features, realistic_wind, recent_data, feature_cols):
     """Update wind-specific features with realistic patterns"""
@@ -583,7 +669,7 @@ def _update_wind_features(self, features, realistic_wind, recent_data, feature_c
             else:
                 # Initialize with realistic wind
                 features[wind_lag_col] = realistic_wind * (0.8 + 0.4 * np.random.random())
-    
+
     # Update wind rolling features
     temp_df = pd.DataFrame(recent_data)
     for window in [3, 5, 7]:
@@ -598,22 +684,23 @@ def _update_wind_features(self, features, realistic_wind, recent_data, feature_c
                     value = temp_df['wind_kph'].rolling(window=window).min().iloc[-1]
                 else:  # max
                     value = temp_df['wind_kph'].rolling(window=window).max().iloc[-1]
-                
+
                 if not pd.isna(value):
                     features[wind_roll_col] = value
-    
+
     # Update wind volatility features
     if len(recent_data) > 1:
-        wind_changes = [recent_data[i]['wind_kph'] - recent_data[i-1]['wind_kph'] 
-                       for i in range(1, len(recent_data))]
+        wind_changes = [recent_data[i]['wind_kph'] - recent_data[i - 1]['wind_kph']
+                        for i in range(1, len(recent_data))]
         if wind_changes:
             features['wind_change'] = wind_changes[-1]
             features['wind_change_abs'] = abs(wind_changes[-1])
 
+
 def _propagate_features(self, features, predicted_data, recent_data, feature_cols, climate_zone):
     """Propagate features for next time step with wind awareness"""
     temp_df = pd.DataFrame(recent_data)
-    
+
     # Update temperature and humidity features (your existing logic)
     for col in ['avg_c', 'humidity']:
         for lag in [1, 2, 3, 7]:
@@ -622,10 +709,11 @@ def _propagate_features(self, features, predicted_data, recent_data, feature_col
                 lag_value = temp_df[col].shift(lag).iloc[-1]
                 if not pd.isna(lag_value):
                     features[lag_col] = lag_value
-    
+
     # Update interaction features
     features['temp_wind_interaction'] = predicted_data['avg_c'] * predicted_data['wind_kph']
     features['temp_gradient'] = predicted_data['max_c'] - predicted_data['min_c']
+
     def predict_weather(self, days=7):
         """Generate weather predictions with enhanced realism"""
         try:
@@ -978,27 +1066,30 @@ def _propagate_features(self, features, predicted_data, recent_data, feature_col
             print(f"Error generating chart: {e}")
             return None
 
+
 predictor = WeatherPredictor()
+
 
 def cleanup_old_predictions():
     """Mark old predictions as not current when they're no longer relevant"""
     try:
         today = datetime.now().date()
         print(f"🧹 Cleaning up predictions older than {today}")
-        
+
         outdated = Prediction.query.filter(
             Prediction.prediction_date < today,
             Prediction.is_current == True
         ).update({'is_current': False}, synchronize_session=False)
-        
+
         if outdated:
             print(f"Marked {outdated} outdated predictions as not current")
         else:
             print("No outdated predictions found")
-            
+
         db.session.commit()
     except Exception as e:
         print(f"Error cleaning up old predictions: {e}")
+
 
 def save_predictions_to_db(city, predictions, model_name, model_metrics, model_comparison=None):
     """Save predictions to the database, properly managing is_current flags"""
@@ -1093,6 +1184,7 @@ def save_predictions_to_db(city, predictions, model_name, model_metrics, model_c
         print(f"Error saving to database: {e}")
         return False
 
+
 def get_latest_predictions_from_db(city, days=7):
     """Retrieve the latest predictions from the database"""
     try:
@@ -1132,14 +1224,17 @@ def get_latest_predictions_from_db(city, days=7):
     except Exception as e:
         print(f"Error retrieving from database: {e}")
         return None
-        
-#Initialize predictor
+
+
+# Initialize predictor
 predictor = WeatherPredictor()
+
 
 @app.route('/health')
 def health_check():
     """Minimal health check for uptime monitoring"""
     return 'OK', 200
+
 
 @app.route('/debug-current')
 def debug_current():
@@ -1147,13 +1242,13 @@ def debug_current():
     try:
         today = datetime.now().date()
         city = "Amman"
-        
+
         print(f"DEBUG: Today is {today}")
-        
+
         all_current = Prediction.query.filter(
             Prediction.is_current == True
         ).all()
-        
+
         current_data = []
         for pred in all_current:
             current_data.append({
@@ -1162,16 +1257,17 @@ def debug_current():
                 'generated': pred.generation_timestamp.date().isoformat(),
                 'is_current': pred.is_current
             })
-        
+
         return jsonify({
             'today': today.isoformat(),
             'database_type': 'PostgreSQL' if 'postgresql' in app.config["SQLALCHEMY_DATABASE_URI"] else 'SQLite',
             'all_current_predictions': current_data,
             'total_current': len(current_data)
         })
-        
+
     except Exception as e:
         return jsonify({'error': str(e)})
+
 
 @app.route('/force-reset-today')
 def force_reset_today():
@@ -1179,21 +1275,22 @@ def force_reset_today():
     try:
         today = datetime.now().date()
         city = "Amman"
-        
+
         reset_count = Prediction.query.filter(
             Prediction.is_current == True
         ).update({'is_current': False}, synchronize_session=False)
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'success': True,
             'message': f'Reset {reset_count} predictions. Next prediction will generate fresh data for {today}',
             'today': today.isoformat()
         })
-        
+
     except Exception as e:
         return jsonify({'error': str(e)})
+
 
 @app.route('/cities', methods=['GET'])
 def get_cities():
@@ -1220,9 +1317,11 @@ def get_cities():
         print("Error fetching cities:", e)
         return jsonify([])
 
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -1250,7 +1349,7 @@ def predict():
                 metrics = latest_performance.detailed_metrics or {}
                 model_name = latest_performance.model_name or "Unknown"
                 r2_score = latest_performance.r2_score or 0
-                
+
                 # Get model comparison data if available
                 if latest_performance.model_comparison:
                     model_results = latest_performance.model_comparison
@@ -1261,7 +1360,7 @@ def predict():
                         r2_scores = []
                         mae_scores = []
                         rmse_scores = []
-                        
+
                         for param_metrics in metrics.values():
                             if isinstance(param_metrics, dict):
                                 if 'r2' in param_metrics:
@@ -1270,7 +1369,7 @@ def predict():
                                     mae_scores.append(param_metrics['mae'])
                                 if 'rmse' in param_metrics:
                                     rmse_scores.append(param_metrics['rmse'])
-                        
+
                         if r2_scores:
                             model_results[model_name] = {
                                 'r2': sum(r2_scores) / len(r2_scores),
@@ -1408,6 +1507,7 @@ def predict():
             'error': f"An unexpected error occurred: {str(e)}"
         })
 
+
 @app.route('/cache/clear', methods=['POST'])
 def clear_cache():
     try:
@@ -1415,6 +1515,7 @@ def clear_cache():
         return jsonify({'success': True, 'message': 'Cache cleared successfully'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
 
 @app.route('/cache/stats', methods=['GET'])
 def cache_stats():
@@ -1428,11 +1529,13 @@ def cache_stats():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+
 def cache_cleanup_task():
     while True:
         time.sleep(86400)
         predictor.clear_old_cache()
         print("Cleared old cache entries")
+
 
 cache_thread = threading.Thread(target=cache_cleanup_task, daemon=True)
 cache_thread.start()
@@ -1484,6 +1587,7 @@ def get_history(city):
             'error': str(e)
         })
 
+
 @app.route('/performance/<city>', methods=['GET'])
 def get_performance(city):
     """Get model performance history"""
@@ -1520,6 +1624,7 @@ def get_performance(city):
             'success': False,
             'error': str(e)
         })
+
 
 @app.route('/debug-db')
 def debug_db():
@@ -1686,6 +1791,7 @@ def get_historical_data(city):
             'error': str(e)
         })
 
+
 @app.route('/historical-performance/<city>', methods=['GET'])
 def get_historical_performance(city):
     """Get historical model performance data"""
@@ -1727,19 +1833,18 @@ def get_historical_performance(city):
         })
 
 
-
 @app.route('/download-historical-data/<city>', methods=['GET'])
 def download_historical_data(city):
     """Download historical weather data - PAST DATES INCLUDING TODAY"""
     try:
         days = request.args.get('days', 30, type=int)
         today = datetime.now().date()
-        
+
         print(f"Download request for {city}: {days} days up to {today}")
 
         # Get the latest version for each PAST date (including today)
         from sqlalchemy import func
-        
+
         subquery = db.session.query(
             Prediction.prediction_date,
             func.max(Prediction.generation_timestamp).label('max_timestamp')
@@ -1803,7 +1908,8 @@ def download_historical_data(city):
         output.seek(0)
         response = make_response(output.getvalue())
         actual_days = len(selected_predictions)
-        response.headers['Content-Disposition'] = f'attachment; filename={city}_historical_weather_data_{actual_days}days.csv'
+        response.headers[
+            'Content-Disposition'] = f'attachment; filename={city}_historical_weather_data_{actual_days}days.csv'
         response.headers['Content-type'] = 'text/csv'
         return response
 
@@ -1954,6 +2060,7 @@ def download_all_weather_data(city):
             'error': str(e)
         })
 
+
 @app.route('/download-all-performance-data/<city>', methods=['GET'])
 def download_all_performance_data(city):
     """Download ALL model performance data as CSV from database"""
@@ -2008,22 +2115,23 @@ def download_all_performance_data(city):
             'error': str(e)
         })
 
+
 @app.route('/deploy-check')
 def deploy_check():
     """Check if it's safe to deploy based on Jordan time - ONLY 3:00 AM and later"""
     try:
         from datetime import datetime
         import pytz
-        
+
         # Get current time in Jordan
         jordan_tz = pytz.timezone('Asia/Amman')
         jordan_time = datetime.now(jordan_tz)
         current_hour = jordan_time.hour
         current_minute = jordan_time.minute
-        
+
         # Safe to deploy ONLY from 3:00 AM Jordan time onwards
         is_safe_time = current_hour >= 3
-        
+
         # More specific messages
         if current_hour == 3 and current_minute == 0:
             message = 'PERFECT! It\'s exactly 3:00 AM Jordan time - SAFE TO DEPLOY!'
@@ -2036,7 +2144,7 @@ def deploy_check():
                 message = f'Wait {minutes_left} minutes until 3:00 AM Jordan time'
             else:
                 message = f'Wait {hours_left} hours and {minutes_left} minutes until 3:00 AM Jordan time'
-        
+
         return jsonify({
             'safe_to_deploy': is_safe_time,
             'jordan_time': jordan_time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -2049,6 +2157,7 @@ def deploy_check():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+
 @app.route('/init-db')
 def init_database():
     """Initialize database tables - RUN THIS FIRST"""
@@ -2058,10 +2167,10 @@ def init_database():
             db.drop_all()
             # Create all tables
             db.create_all()
-            
+
             print("Database tables created successfully!")
             print("Tables: predictions, model_performance")
-            
+
             return jsonify({
                 'success': True,
                 'message': 'Database initialized successfully!',
@@ -2070,6 +2179,7 @@ def init_database():
             })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
 
 @app.route('/fix-column-length')
 def fix_column_length():
@@ -2082,49 +2192,45 @@ def fix_column_length():
         return f"Error: {str(e)}"
 
 
-
-
-
-
 @app.route('/fix-today-predictions')
 def fix_today_predictions():
     """Force generate predictions for today and fix any date issues"""
     try:
         today = datetime.now().date()
         city = "Amman"
-        
+
         print(f"Force generating predictions for {today}")
-        
+
         # Mark all current predictions as not current
         reset_count = Prediction.query.filter(
             Prediction.is_current == True
         ).update({'is_current': False}, synchronize_session=False)
-        
+
         db.session.commit()
         print(f"Reset {reset_count} predictions")
-        
+
         # Force new training and prediction
         training_result = predictor.train_model(city)
         if 'error' in training_result:
             return jsonify({'error': training_result['error']})
-            
+
         prediction_result = predictor.predict_weather(days=7)
         if 'error' in prediction_result:
             return jsonify({'error': prediction_result['error']})
-        
+
         # Save to database
         model_metrics = {}
         if hasattr(predictor, 'results') and predictor.best_model_name:
             best_model_result = predictor.results[predictor.best_model_name]
             model_metrics = best_model_result.get('detailed_metrics', {})
-        
+
         save_success = save_predictions_to_db(
             city,
             prediction_result['predictions'],
             predictor.best_model_name,
             model_metrics
         )
-        
+
         if save_success:
             # Verify the new predictions
             new_predictions = get_latest_predictions_from_db(city, 7)
@@ -2136,16 +2242,16 @@ def fix_today_predictions():
                     'prediction_dates': dates,
                     'today': today.strftime('%Y-%m-%d')
                 })
-        
+
         return jsonify({'error': 'Failed to generate new predictions'})
-        
+
     except Exception as e:
         return jsonify({'error': str(e)})
 
 
-
 # Start keep-alive system when app loads
 keep_alive_manager.start_keep_alive()
+
 
 @app.route('/generate-daily-predictions')
 def generate_daily_predictions():
@@ -2153,24 +2259,24 @@ def generate_daily_predictions():
     try:
         # List of cities you want daily predictions for
         cities = ["Amman"]
-        
+
         results = []
-        
+
         for city in cities:
             try:
                 print(f"Generating predictions for {city}...")
-                
+
                 # Train model for this city
                 training_result = predictor.train_model(city)
                 if 'error' in training_result:
                     results.append({
                         "city": city,
-                        "status": "error", 
+                        "status": "error",
                         "message": f"Training failed: {training_result['error']}"
                     })
                     print(f"Training failed for {city}: {training_result['error']}")
                     continue
-                
+
                 # Generate predictions
                 prediction_result = predictor.predict_weather(days=7)
                 if 'error' in prediction_result:
@@ -2181,16 +2287,16 @@ def generate_daily_predictions():
                     })
                     print(f"Prediction failed for {city}: {prediction_result['error']}")
                     continue
-                
+
                 # Get model metrics
                 model_metrics = {}
                 model_name = "Unknown"
-                
+
                 if hasattr(predictor, 'results') and predictor.best_model_name:
                     best_model_result = predictor.results[predictor.best_model_name]
                     model_metrics = best_model_result.get('detailed_metrics', {})
                     model_name = predictor.best_model_name
-                
+
                 # Save to database
                 save_success = save_predictions_to_db(
                     city,
@@ -2198,7 +2304,7 @@ def generate_daily_predictions():
                     model_name,
                     model_metrics
                 )
-                
+
                 if save_success:
                     results.append({
                         "city": city,
@@ -2215,7 +2321,7 @@ def generate_daily_predictions():
                         "message": "Failed to save predictions to database"
                     })
                     print(f"Database save failed for {city}")
-                    
+
             except Exception as e:
                 results.append({
                     "city": city,
@@ -2223,10 +2329,10 @@ def generate_daily_predictions():
                     "message": f"Unexpected error: {str(e)}"
                 })
                 print(f"Unexpected error for {city}: {e}")
-        
+
         # Clean up old predictions
         cleanup_old_predictions()
-        
+
         return {
             "timestamp": datetime.now().isoformat(),
             "status": "completed",
@@ -2235,26 +2341,12 @@ def generate_daily_predictions():
             "failed": len([r for r in results if r['status'] == 'error']),
             "results": results
         }
-        
+
     except Exception as e:
         return jsonify({
-            "status": "error", 
+            "status": "error",
             "message": f"Global error: {str(e)}"
         }), 500
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @app.route('/migrate-database', methods=['GET', 'POST'])
@@ -2266,31 +2358,29 @@ def migrate_database():
             db_path = os.path.join('instance', 'weather_predictions.db')
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            
+
             cursor.execute("PRAGMA table_info(model_performance)")
             columns = [column[1] for column in cursor.fetchall()]
-            
+
             if 'model_comparison' not in columns:
                 cursor.execute('ALTER TABLE model_performance ADD COLUMN model_comparison JSON')
                 print("✓ Added model_comparison column to model_performance table")
-                
+
                 # Update existing records with empty model_comparison
                 cursor.execute('UPDATE model_performance SET model_comparison = ?', (json.dumps({}),))
                 print("✓ Updated existing records with empty model_comparison")
-                
+
                 message = "Database migration completed successfully!"
             else:
                 message = "Database already has the model_comparison column."
-            
+
             conn.commit()
             conn.close()
-            
+
             return jsonify({'success': True, 'message': message})
-            
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
-
 
 
 @app.route('/fix-database', methods=['GET', 'POST'])
@@ -2299,7 +2389,7 @@ def fix_database():
     try:
         with app.app_context():
             from sqlalchemy import text
-            
+
             # Check if we're using PostgreSQL
             if 'postgresql' in app.config["SQLALCHEMY_DATABASE_URI"]:
                 try:
@@ -2309,30 +2399,30 @@ def fix_database():
                         FROM information_schema.columns 
                         WHERE table_name='model_performance' AND column_name='model_comparison'
                     """)
-                    
+
                     result = db.session.execute(check_query).fetchone()
-                    
+
                     if not result:
                         # Add the column to PostgreSQL
                         alter_query = text("ALTER TABLE model_performance ADD COLUMN model_comparison JSONB")
                         db.session.execute(alter_query)
-                        
+
                         # Set default empty JSON for existing records
                         update_query = text("UPDATE model_performance SET model_comparison = '{}'::jsonb")
                         db.session.execute(update_query)
-                        
+
                         db.session.commit()
                         message = "Successfully added model_comparison column to PostgreSQL database!"
                     else:
                         message = "model_comparison column already exists in PostgreSQL database!"
-                        
+
                 except Exception as e:
                     db.session.rollback()
                     message = f"Error: {str(e)}"
-                    
+
             else:
                 message = "Not a PostgreSQL database - no migration needed"
-            
+
             return f"""
             <html>
                 <head>
@@ -2356,7 +2446,7 @@ def fix_database():
                 </body>
             </html>
             """
-            
+
     except Exception as e:
         return f"""
         <html>
@@ -2380,18 +2470,18 @@ def get_current_weather(city):
             "key": API_KEY,
             "q": city
         }
-        
+
         response = requests.get(url, params=params, timeout=30)
-        
+
         if response.status_code != 200:
             return jsonify({
                 'success': False,
                 'error': 'Unable to fetch current weather data'
             })
-        
+
         data = response.json()
         current = data['current']
-        
+
         current_weather = {
             'temp_c': current['temp_c'],
             'humidity': current['humidity'],
@@ -2404,47 +2494,49 @@ def get_current_weather(city):
             'vis_km': current['vis_km'],
             'uv': current['uv']
         }
-        
+
         return jsonify({
             'success': True,
             'city': city,
             'current_weather': current_weather
         })
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e)
         })
 
+
 @app.route('/fix-current-flags')
 def fix_current_flags():
     """One-time fix for is_current flags"""
     try:
         today = datetime.now().date()
-        
+
         # Mark past predictions as not current
         past_updated = Prediction.query.filter(
             Prediction.prediction_date < today
         ).update({'is_current': False})
-        
-        # Mark current/future as current  
+
+        # Mark current/future as current
         future_updated = Prediction.query.filter(
             Prediction.prediction_date >= today
         ).update({'is_current': True})
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'success': True,
             'message': f'Fixed {past_updated} past records and {future_updated} current/future records',
             'past_updated': past_updated,
             'future_updated': future_updated
         })
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
+
 
 @app.route('/trigger-daily-predictions')
 def trigger_daily_predictions():
@@ -2453,21 +2545,20 @@ def trigger_daily_predictions():
         # Just call the existing route internally
         with app.test_client() as client:
             response = client.get('/generate-daily-predictions')
-            
+
         return jsonify({
             'success': response.status_code == 200,
             'status_code': response.status_code,
             'message': 'Daily predictions triggered',
             'timestamp': datetime.now().isoformat()
         })
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
-
 
 
 if __name__ == '__main__':
