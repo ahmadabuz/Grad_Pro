@@ -271,14 +271,14 @@ class WeatherPredictor:
             df[f'wind_change_lag_{lag}'] = df['wind_change'].shift(lag)
             
         for lag in [1, 2, 3, 5, 7, 10, 14]:
-            for col in ['avg_c', 'humidity', 'precip_mm']:  # Removed wind_kph from this loop
-            df[f'{col}_lag_{lag}'] = df[col].shift(lag)
+            for col in ['avg_c', 'humidity', 'precip_mm']:  
+                df[f'{col}_lag_{lag}'] = df[col].shift(lag)
         
         for window in [3, 5, 7]:
             df[f'wind_kph_rolling_mean_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).mean()
             df[f'wind_kph_rolling_std_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
             df[f'wind_kph_rolling_min_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).min()
-             df[f'wind_kph_rolling_max_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).max()
+            df[f'wind_kph_rolling_max_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).max()
 
         for window in [7, 10, 14]:
             for col in ['avg_c', 'humidity', 'precip_mm']:
