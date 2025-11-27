@@ -244,79 +244,71 @@ class WeatherPredictor:
         return self.city_climate_zones['default']
 
     def prepare_advanced_features(self, data):
-    """Enhanced feature engineering with wind-specific patterns"""
-    df = pd.DataFrame(data)
-    df['date'] = pd.to_datetime(df['date'])
-
-    # Basic temporal features
-    df['day_of_year'] = df['date'].dt.dayofyear
-    df['day_sin'] = np.sin(2 * np.pi * df['day_of_year'] / 365.25)
-    df['day_cos'] = np.cos(2 * np.pi * df['day_of_year'] / 365.25)
-    df['month'] = df['date'].dt.month
-    df['week_of_year'] = df['date'].dt.isocalendar().week
-    df['is_weekend'] = df['date'].dt.weekday >= 5
-
-    # WIND-SPECIFIC FEATURE ENGINEERING
-    # Wind has different patterns than temperature - more random, less seasonal
-    df['wind_seasonal_factor'] = np.sin(2 * np.pi * df['day_of_year'] / 182.625)  # 6-month cycle for wind
-    df['wind_daily_cycle'] = np.sin(2 * np.pi * df['day_of_year'] / 365.25 * 4)  # Quarterly variations
-    
-    # Wind persistence features
-    df['wind_persistence'] = df['wind_kph'].shift(1) / (df['wind_kph'] + 0.1)
-    df['wind_change'] = df['wind_kph'].diff()
-    df['wind_change_abs'] = abs(df['wind_change'])
-    
-    # Wind volatility features
-    for window in [3, 7, 14]:
-        df[f'wind_volatility_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
-        df[f'wind_change_std_{window}'] = df['wind_change'].rolling(window=window, min_periods=1).std()
-
-    # Enhanced lag features with wind-specific lags
-    for lag in [1, 2, 3]:  # Wind has shorter memory than temperature
-        df[f'wind_kph_lag_{lag}'] = df['wind_kph'].shift(lag)
-        df[f'wind_change_lag_{lag}'] = df['wind_change'].shift(lag)
-
-    # Temperature lag features (keep your existing ones)
-    for lag in [1, 2, 3, 5, 7, 10, 14]:
-        for col in ['avg_c', 'humidity', 'precip_mm']:  # Removed wind_kph from this loop
+        df = pd.DataFrame(data)
+        df['date'] = pd.to_datetime(df['date'])
+        # Basic temporal features
+        df['day_of_year'] = df['date'].dt.dayofyear
+        df['day_sin'] = np.sin(2 * np.pi * df['day_of_year'] / 365.25)
+        df['day_cos'] = np.cos(2 * np.pi * df['day_of_year'] / 365.25)
+        df['month'] = df['date'].dt.month
+        df['week_of_year'] = df['date'].dt.isocalendar().week
+        df['is_weekend'] = df['date'].dt.weekday >= 5
+        # WIND-SPECIFIC FEATURE ENGINEERING
+        # Wind has different patterns than temperature - more random, less seasonal
+        df['wind_seasonal_factor'] = np.sin(2 * np.pi * df['day_of_year'] / 182.625)  # 6-month cycle for wind
+        df['wind_daily_cycle'] = np.sin(2 * np.pi * df['day_of_year'] / 365.25 * 4)  # Quarterly variations
+        # Wind persistence features
+        df['wind_persistence'] = df['wind_kph'].shift(1) / (df['wind_kph'] + 0.1)
+        df['wind_change'] = df['wind_kph'].diff()
+        df['wind_change_abs'] = abs(df['wind_change'])
+        # Wind volatility features 
+        for window in [3, 7, 14]:
+            df[f'wind_volatility_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
+            df[f'wind_change_std_{window}'] = df['wind_change'].rolling(window=window, min_periods=1).std()
+            
+        for lag in [1, 2, 3]:  
+            df[f'wind_kph_lag_{lag}'] = df['wind_kph'].shift(lag)
+            df[f'wind_change_lag_{lag}'] = df['wind_change'].shift(lag)
+            
+        for lag in [1, 2, 3, 5, 7, 10, 14]:
+            for col in ['avg_c', 'humidity', 'precip_mm']:  # Removed wind_kph from this loop
             df[f'{col}_lag_{lag}'] = df[col].shift(lag)
+        
+        for window in [3, 5, 7]:
+            df[f'wind_kph_rolling_mean_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).mean()
+            df[f'wind_kph_rolling_std_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
+            df[f'wind_kph_rolling_min_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).min()
+             df[f'wind_kph_rolling_max_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).max()
 
-    # Rolling statistics - wind-specific windows
-    for window in [3, 5, 7]:  # Shorter windows for wind (more variable)
-        df[f'wind_kph_rolling_mean_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).mean()
-        df[f'wind_kph_rolling_std_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).std()
-        df[f'wind_kph_rolling_min_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).min()
-        df[f'wind_kph_rolling_max_{window}'] = df['wind_kph'].rolling(window=window, min_periods=1).max()
+        for window in [7, 10, 14]:
+            for col in ['avg_c', 'humidity', 'precip_mm']:
+                df[f'{col}_rolling_mean_{window}'] = df[col].rolling(window=window, min_periods=1).mean()
+                df[f'{col}_rolling_std_{window}'] = df[col].rolling(window=window, min_periods=1).std()
+        # Pressure gradient simulation (wind driver)
+        df['temp_gradient'] = df['max_c'] - df['min_c']  # Larger gradient = more wind
+        df['humidity_pressure_effect'] = (100 - df['humidity']) * 0.1  # Lower humidity = higher pressure potential
+        # Wind-specific interaction features
+        df['temp_wind_interaction'] = df['avg_c'] * df['wind_kph']
+        df['seasonal_wind_boost'] = df['wind_seasonal_factor'] * df['wind_kph']
+        # Weather system features
+        df['weather_system_change'] = (df['avg_c'].diff(1) + df['humidity'].diff(1) + df['wind_kph'].diff(1)).abs()
+         # Fill missing values with wind-appropriate methods
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            if 'wind' in col:
+                # For wind features, use forward fill then random noise
+                df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
+                if df[col].isna().any():
+                    df[col] = df[col].fillna(np.random.uniform(5, 15))  # Reasonable wind range
+            else:
+                df[col] = df[col].fillna(method='ffill').fillna(method='bfill').fillna(df[col].mean())
+        return df    
 
-    # Longer windows for temperature/humidity
-    for window in [7, 10, 14]:
-        for col in ['avg_c', 'humidity', 'precip_mm']:
-            df[f'{col}_rolling_mean_{window}'] = df[col].rolling(window=window, min_periods=1).mean()
-            df[f'{col}_rolling_std_{window}'] = df[col].rolling(window=window, min_periods=1).std()
 
-    # Pressure gradient simulation (wind driver)
-    df['temp_gradient'] = df['max_c'] - df['min_c']  # Larger gradient = more wind
-    df['humidity_pressure_effect'] = (100 - df['humidity']) * 0.1  # Lower humidity = higher pressure potential
+
+            
     
-    # Wind-specific interaction features
-    df['temp_wind_interaction'] = df['avg_c'] * df['wind_kph']
-    df['seasonal_wind_boost'] = df['wind_seasonal_factor'] * df['wind_kph']
     
-    # Weather system features
-    df['weather_system_change'] = (df['avg_c'].diff(1) + df['humidity'].diff(1) + df['wind_kph'].diff(1)).abs()
-    
-    # Fill missing values with wind-appropriate methods
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    for col in numeric_cols:
-        if 'wind' in col:
-            # For wind features, use forward fill then random noise
-            df[col] = df[col].fillna(method='ffill').fillna(method='bfill')
-            if df[col].isna().any():
-                df[col] = df[col].fillna(np.random.uniform(5, 15))  # Reasonable wind range
-        else:
-            df[col] = df[col].fillna(method='ffill').fillna(method='bfill').fillna(df[col].mean())
-
-    return df
 
     def calculate_heat_index(self, temp, humidity):
         """Calculate heat index for realistic temperature perception"""
